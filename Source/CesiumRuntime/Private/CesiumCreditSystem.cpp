@@ -252,6 +252,10 @@ void ACesiumCreditSystem::BeginDestroy() {
 }
 
 void ACesiumCreditSystem::updateCreditsViewport(bool recreateWidget) {
+#pragma region Das
+  return;
+#pragma endregion
+
   if (IsRunningDedicatedServer())
     return;
   if (!IsValid(GetWorld()))

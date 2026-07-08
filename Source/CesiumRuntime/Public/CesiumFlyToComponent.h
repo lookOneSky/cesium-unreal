@@ -146,12 +146,15 @@ public:
    * If CanInterruptByMoving is true and the Actor moves independent of this
    * component, then the flight in progress will be canceled.
    */
+
+#pragma region Das
   UFUNCTION(BlueprintCallable, Category = "Cesium")
-  void FlyToLocationEarthCenteredEarthFixed(
+  virtual void FlyToLocationEarthCenteredEarthFixed(
       const FVector& EarthCenteredEarthFixedDestination,
       double YawAtDestination,
       double PitchAtDestination,
       bool CanInterruptByMoving);
+#pragma endregion
 
   /**
    * Begin a smooth camera flight to the given WGS84 longitude in degrees (x),
@@ -209,10 +212,29 @@ protected:
       ELevelTick TickType,
       FActorComponentTickFunction* ThisTickFunction) override;
 
-private:
+#pragma region Das
+  /// <summary>
+  /// 计算飞行插值位置和旋转，可被子类重写以实现自定义插值
+  /// </summary>
+  /// <param name="flyPercentage">飞行进度百分比 (0.0 - 1.0)</param>
+  /// <param name="OutPosition">输出的ECEF位置</param>
+  /// <param name="OutRotation">输出的东南上坐标系旋转</param>
+  /// <returns>是否成功计算插值</returns>
+  virtual bool CalculateFlightInterpolation(
+      float flyPercentage,
+      FVector& OutPosition,
+      FQuat& OutRotation);
+
+protected:
+#pragma endregion
   FQuat GetCurrentRotationEastSouthUp();
   void SetCurrentRotationEastSouthUp(const FQuat& EastSouthUpRotation);
 
+#pragma region Das
+protected:
+  float mfAddHeightSacle = 1.0;
+
+#pragma endregion
   bool _flightInProgress = false;
   bool _canInterruptByMoving;
   float _currentFlyTime;
@@ -223,4 +245,9 @@ private:
   FVector _previousPositionEcef;
   TUniquePtr<CesiumGeospatial::SimplePlanarEllipsoidCurve> _currentCurve;
   double _length;
+
+#pragma region Das
+  FQuat _previousRotationEcef;
+#pragma endregion
+
 };

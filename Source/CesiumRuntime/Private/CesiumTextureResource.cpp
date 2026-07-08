@@ -201,6 +201,10 @@ FTexture2DRHIRef createAsyncTextureAndWait(
     void** InitialMipData,
     uint32 NumInitialMips) {
 
+#pragma region Das
+	TRACE_CPUPROFILER_EVENT_SCOPE(createAsyncTextureAndWait);
+#pragma endregion
+
 #if ENGINE_VERSION_5_4_OR_HIGHER
   FGraphEventRef CompletionEvent;
 

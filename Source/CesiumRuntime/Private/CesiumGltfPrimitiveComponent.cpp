@@ -85,6 +85,22 @@ calcBounds(const ICesiumPrimitive& primitive, const FTransform& LocalToWorld) {
 FBoxSphereBounds UCesiumGltfPrimitiveComponent::CalcBounds(
     const FTransform& LocalToWorld) const {
   if (auto bounds = calcBounds(*this, LocalToWorld)) {
+
+#pragma region Das
+		//玉虚宫地板丢精度了，增加包围盒防止闪烁。包围盒计算应该也丢了精度。
+		if (bounds->BoxExtent.Z < 20)
+		{
+			bounds->BoxExtent.Z = 20;
+		}
+
+		//calcbound 360视频还是容易丢精度
+		ACesium3DTileset* pTileset = Cast<ACesium3DTileset>(GetOwner());
+		if (pTileset)
+		{
+			bounds->BoxExtent *= pTileset->BoundScale;
+		}
+#pragma endregion
+
     return *bounds;
   }
   return Super::CalcBounds(LocalToWorld);
@@ -140,6 +156,29 @@ void UCesiumGltfPrimitiveComponent::UpdateTransformFromCesium(
   if (!moveable) {
     SendPhysicsTransform(ETeleportType::ResetPhysics);
   }
+
+ #pragma region Das
+	FTransform trans = GetComponentTransform();
+  if (!mbDrawBound)
+  {
+    FString strName = GetName();
+    if (strName.Contains(TEXT("Tile_-009_+022\\Tile_-009_+022_L22_0uuuu00201.b3dm mesh 0 primitive 0")))
+    {
+      int a = 0;
+      a++;
+      FBoxSphereBounds bounds = CalcBounds(trans);
+      DrawDebugBox(
+          GetWorld(),
+          bounds.Origin,
+          bounds.BoxExtent,
+          FColor(0, 255, 0, 255),
+          true,
+          1e10);
+
+      mbDrawBound = true;
+    }
+  }
+#pragma endregion
 }
 
 void UCesiumGltfInstancedComponent::UpdateTransformFromCesium(

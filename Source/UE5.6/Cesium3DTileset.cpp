@@ -52,17 +52,6 @@
 #include <memory>
 #include <spdlog/spdlog.h>
 
-#pragma region Das
-#include "Misc/FileHelper.h"
-#include "Misc/Paths.h"
-#include "Serialization/JsonSerializer.h"
-#include "Serialization/JsonReader.h"
-#include "DasCesium/GltfCreateProcessBase.h"
-THIRD_PARTY_INCLUDES_START
-#include "CesiumUtility/Uri.h"
-THIRD_PARTY_INCLUDES_END
-#pragma endregion
-
 #ifdef CESIUM_DEBUG_TILE_STATES
 #include "HAL/PlatformFileManager.h"
 #include <Cesium3DTilesSelection/DebugTileStateDatabase.h>
@@ -124,10 +113,6 @@ ACesium3DTileset::ACesium3DTileset()
   this->Root = this->RootComponent;
 
   PlatformName = UGameplayStatics::GetPlatformName();
-
-#pragma region Das
-  mnMillSecondSlow = 100;
-#pragma endregion
 }
 
 ACesium3DTileset::~ACesium3DTileset() { this->DestroyTileset(); }
@@ -247,17 +232,20 @@ ACesiumGeoreference* ACesium3DTileset::ResolveGeoreference() {
         ACesiumGeoreference::GetDefaultGeoreferenceForActor(this);
   }
 
-  UCesium3DTilesetRoot* pRoot = Cast<UCesium3DTilesetRoot>(this->RootComponent);
-  if (pRoot) {
-    this->ResolvedGeoreference->OnGeoreferenceUpdated.AddUniqueDynamic(
-        pRoot,
-        &UCesium3DTilesetRoot::HandleGeoreferenceUpdated);
-    this->ResolvedGeoreference->OnEllipsoidChanged.AddUniqueDynamic(
-        this,
-        &ACesium3DTileset::HandleOnGeoreferenceEllipsoidChanged);
+  if (this->ResolvedGeoreference) {
+    UCesium3DTilesetRoot* pRoot =
+        Cast<UCesium3DTilesetRoot>(this->RootComponent);
+    if (pRoot) {
+      this->ResolvedGeoreference->OnGeoreferenceUpdated.AddUniqueDynamic(
+          pRoot,
+          &UCesium3DTilesetRoot::HandleGeoreferenceUpdated);
+      this->ResolvedGeoreference->OnEllipsoidChanged.AddUniqueDynamic(
+          this,
+          &ACesium3DTileset::HandleOnGeoreferenceEllipsoidChanged);
 
-    // Update existing tile positions, if any.
-    pRoot->HandleGeoreferenceUpdated();
+      // Update existing tile positions, if any.
+      pRoot->HandleGeoreferenceUpdated();
+    }
   }
 
   return this->ResolvedGeoreference;
@@ -765,12 +753,6 @@ void ACesium3DTileset::HandleOnGeoreferenceEllipsoidChanged(
 void ACesium3DTileset::BeginPlay() {
   Super::BeginPlay();
 
-#pragma region Das
-  mbBeginPlay = true;
-	ReadSlowTilesFromJson();
-#pragma endregion
-
-
   this->ResolveGeoreference();
   this->ResolveCameraManager();
   this->ResolveCreditSystem();
@@ -898,13 +880,6 @@ getCesiumViewExtension() {
   return cesiumViewExtension;
 }
 } // namespace
-
-#pragma region Das
-GltfCreateProcessBase* ACesium3DTileset::CreateGltfCreateProcess(
-    Cesium3DTilesSelection::TileLoadResult& tileLoadResult) {
-  return nullptr;
-}
-#pragma endregion
 
 void ACesium3DTileset::LoadTileset() {
   TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::LoadTileset)
@@ -1113,9 +1088,53 @@ void ACesium3DTileset::LoadTileset() {
         TCHAR_TO_UTF8(*Value)});
   }
 
-#pragma region Das
-  CreateTileset(externals, options);
-#pragma endregion
+  switch (this->TilesetSource) {
+  case ETilesetSource::FromEllipsoid:
+    UE_LOG(LogCesium, Log, TEXT("Loading tileset from ellipsoid"));
+    this->_pTileset = TUniquePtr<Cesium3DTilesSelection::Tileset>(
+        Cesium3DTilesSelection::EllipsoidTilesetLoader::createTileset(
+            externals,
+            options)
+            .release());
+    break;
+  case ETilesetSource::FromUrl:
+    UE_LOG(LogCesium, Log, TEXT("Loading tileset from URL %s"), *this->Url);
+    this->_pTileset = MakeUnique<Cesium3DTilesSelection::Tileset>(
+        externals,
+        TCHAR_TO_UTF8(*this->Url),
+        options);
+    break;
+  case ETilesetSource::FromCesiumIon:
+    UE_LOG(
+        LogCesium,
+        Log,
+        TEXT("Loading tileset for asset ID %d"),
+        this->IonAssetID);
+    FString token = this->IonAccessToken.IsEmpty()
+                        ? this->CesiumIonServer->DefaultIonAccessToken
+                        : this->IonAccessToken;
+
+#if WITH_EDITOR
+    this->CesiumIonServer->ResolveApiUrl();
+#endif
+
+    std::string ionAssetEndpointUrl =
+        TCHAR_TO_UTF8(*this->CesiumIonServer->ApiUrl);
+
+    if (!ionAssetEndpointUrl.empty()) {
+      // Make sure the URL ends with a slash
+      if (!ionAssetEndpointUrl.empty() && *ionAssetEndpointUrl.rbegin() != '/')
+        ionAssetEndpointUrl += '/';
+
+      this->_pTileset = MakeUnique<Cesium3DTilesSelection::Tileset>(
+          externals,
+          static_cast<uint32_t>(this->IonAssetID),
+          TCHAR_TO_UTF8(*token),
+          options,
+          ionAssetEndpointUrl);
+    }
+    break;
+  }
 
 #ifdef CESIUM_DEBUG_TILE_STATES
   FString dbDirectory = FPaths::Combine(
@@ -1266,9 +1285,7 @@ void ACesium3DTileset::DestroyTileset() {
   }
 }
 
-#pragma region Das
-std::vector<FCesiumCamera> ACesium3DTileset::GetCameras(){
-#pragma endregion
+std::vector<FCesiumCamera> ACesium3DTileset::GetCameras() const {
   TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::CollectCameras)
   std::vector<FCesiumCamera> cameras = this->GetPlayerCameras();
 
@@ -1295,6 +1312,16 @@ std::vector<FCesiumCamera> ACesium3DTileset::GetCameras(){
       cameras.push_back(cameraIt.Value);
     }
   }
+
+#pragma region Das
+  // 如果开启了PlayMovie和Play360Movie模式，且只有一个相机，扩展为24个相机
+  if (Play360Movie && cameras.size() == 1)
+  {
+	  FCesiumCamera baseCamera = cameras[0];
+	  cameras = Create360Cameras(baseCamera);
+	  //UpdateViewFrustumComponents(cameras);
+  }
+#pragma endregion
 
   return cameras;
 }
@@ -1548,7 +1575,7 @@ ACesium3DTileset::CreateViewStateFromViewParameters(
   glm::dvec3 tilesetCameraUp = glm::normalize(
       glm::dvec3(unrealWorldToTileset * glm::dvec4(up.X, up.Y, up.Z, 0.0)));
 
-  return Cesium3DTilesSelection::ViewState::create(
+  return Cesium3DTilesSelection::ViewState(
       tilesetCameraLocation,
       tilesetCameraFront,
       tilesetCameraUp,
@@ -1640,7 +1667,8 @@ bool ACesium3DTileset::ShouldTickIfViewportsOnly() const {
 namespace {
 template <typename Func>
 void forEachRenderableTile(const auto& tiles, Func&& f) {
-  for (Cesium3DTilesSelection::Tile* pTile : tiles) {
+  for (const CesiumUtility::IntrusivePointer<Cesium3DTilesSelection::Tile>&
+           pTile : tiles) {
     if (!pTile ||
         pTile->getState() != Cesium3DTilesSelection::TileLoadState::Done) {
       continue;
@@ -1668,13 +1696,17 @@ void forEachRenderableTile(const auto& tiles, Func&& f) {
 }
 
 void removeVisibleTilesFromList(
-    std::vector<Cesium3DTilesSelection::Tile*>& list,
-    const std::vector<Cesium3DTilesSelection::Tile*>& visibleTiles) {
+    std::vector<CesiumUtility::IntrusivePointer<Cesium3DTilesSelection::Tile>>&
+        list,
+    const std::vector<
+        CesiumUtility::IntrusivePointer<Cesium3DTilesSelection::Tile>>&
+        visibleTiles) {
   if (list.empty()) {
     return;
   }
 
-  for (Cesium3DTilesSelection::Tile* pTile : visibleTiles) {
+  for (const CesiumUtility::IntrusivePointer<Cesium3DTilesSelection::Tile>&
+           pTile : visibleTiles) {
     auto it = std::find(list.begin(), list.end(), pTile);
     if (it != list.end()) {
       list.erase(it);
@@ -1691,11 +1723,15 @@ void removeVisibleTilesFromList(
  *
  * @param tiles The tiles to hide
  */
-void hideTiles(const std::vector<Cesium3DTilesSelection::Tile*>& tiles) {
+void hideTiles(
+    const std::vector<
+        CesiumUtility::IntrusivePointer<Cesium3DTilesSelection::Tile>>& tiles) {
   TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::HideTiles)
   forEachRenderableTile(
       tiles,
-      [](Cesium3DTilesSelection::Tile* /*pTile*/, UCesiumGltfComponent* pGltf) {
+      [](const CesiumUtility::IntrusivePointer<
+             Cesium3DTilesSelection::Tile>& /*pTile*/,
+         UCesiumGltfComponent* pGltf) {
         if (pGltf->IsVisible()) {
           TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::SetVisibilityFalse)
           pGltf->SetVisibility(false, true);
@@ -1714,11 +1750,14 @@ void hideTiles(const std::vector<Cesium3DTilesSelection::Tile*>& tiles) {
  * list. This includes tiles that are fading out.
  */
 void removeCollisionForTiles(
-    const std::unordered_set<Cesium3DTilesSelection::Tile*>& tiles) {
+    const std::unordered_set<
+        CesiumUtility::IntrusivePointer<Cesium3DTilesSelection::Tile>>& tiles) {
   TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::RemoveCollisionForTiles)
   forEachRenderableTile(
       tiles,
-      [](Cesium3DTilesSelection::Tile* /*pTile*/, UCesiumGltfComponent* pGltf) {
+      [](const CesiumUtility::IntrusivePointer<
+             Cesium3DTilesSelection::Tile>& /*pTile*/,
+         UCesiumGltfComponent* pGltf) {
         TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::SetCollisionDisabled)
         pGltf->SetCollisionEnabled(ECollisionEnabled::NoCollision);
       });
@@ -1800,10 +1839,11 @@ void ACesium3DTileset::updateLastViewUpdateResultState(
         ResolveGeoreference();
     check(Georeference);
 
-    for (Cesium3DTilesSelection::Tile* tile : result.tilesToRenderThisFrame) {
+    for (const CesiumUtility::IntrusivePointer<Cesium3DTilesSelection::Tile>&
+             pTile : result.tilesToRenderThisFrame) {
       CesiumGeometry::OrientedBoundingBox obb =
           Cesium3DTilesSelection::getOrientedBoundingBoxFromBoundingVolume(
-              tile->getBoundingVolume(),
+              pTile->getBoundingVolume(),
               Georeference->GetEllipsoid()->GetNativeEllipsoid());
 
       FVector unrealCenter =
@@ -1814,9 +1854,9 @@ void ACesium3DTileset::updateLastViewUpdateResultState(
           TEXT("ID %s (%p)"),
           UTF8_TO_TCHAR(
               Cesium3DTilesSelection::TileIdUtilities::createTileIdString(
-                  tile->getTileID())
+                  pTile->getTileID())
                   .c_str()),
-          tile);
+          pTile.get());
 
       DrawDebugString(World, unrealCenter, text, nullptr, FColor::Red, 0, true);
     }
@@ -1900,18 +1940,15 @@ void ACesium3DTileset::updateLastViewUpdateResultState(
 }
 
 void ACesium3DTileset::showTilesToRender(
-    const std::vector<Cesium3DTilesSelection::Tile*>& tiles) {
+    const std::vector<
+        CesiumUtility::IntrusivePointer<Cesium3DTilesSelection::Tile>>& tiles) {
   TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::ShowTilesToRender)
   forEachRenderableTile(
       tiles,
       [&RootComponent = this->RootComponent,
-       &BodyInstance = this->BodyInstance,
-#pragma region Das
-		   CreatePhysicsMeshes = CreatePhysicsMeshes,
-       LimitCollisionUpdate = LimitCollisionUpdate
-#pragma endregion
-      ](
-          Cesium3DTilesSelection::Tile* pTile,
+       &BodyInstance = this->BodyInstance](
+          const CesiumUtility::IntrusivePointer<Cesium3DTilesSelection::Tile>&
+              pTile,
           UCesiumGltfComponent* pGltf) {
         applyActorCollisionSettings(BodyInstance, pGltf);
 
@@ -1921,12 +1958,6 @@ void ACesium3DTileset::showTilesToRender(
           bool attached = pGltf->AttachToComponent(
               RootComponent,
               FAttachmentTransformRules::KeepRelativeTransform);
-#pragma region Das
-          if (LimitCollisionUpdate)
-          {
-            pGltf->SetLimitCollisionUpdate(true);
-          }
-#pragma endregion
           if (!attached) {
             FString tileIdString(
                 Cesium3DTilesSelection::TileIdUtilities::createTileIdString(
@@ -1945,15 +1976,10 @@ void ACesium3DTileset::showTilesToRender(
           pGltf->SetVisibility(true, true);
         }
 
-#pragma region Das
-				{
-					TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::SetCollisionEnabled)
-          if (CreatePhysicsMeshes)
-          {
-						pGltf->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-          }
-				}
-#pragma endregion
+        {
+          TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::SetCollisionEnabled)
+          pGltf->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+        }
       });
 }
 
@@ -1961,7 +1987,8 @@ static void updateTileFades(const auto& tiles, bool fadingIn) {
   forEachRenderableTile(
       tiles,
       [fadingIn](
-          Cesium3DTilesSelection::Tile* pTile,
+          const CesiumUtility::IntrusivePointer<Cesium3DTilesSelection::Tile>&
+              pTile,
           UCesiumGltfComponent* pGltf) {
         float percentage = pTile->getContent()
                                .getRenderContent()
@@ -2048,55 +2075,34 @@ void ACesium3DTileset::Tick(float DeltaTime) {
   const Cesium3DTilesSelection::ViewUpdateResult* pResult;
   if (this->_captureMovieMode) {
     TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::updateViewOffline)
-    pResult = &this->_pTileset->updateViewOffline(frustums);
+    pResult = &this->_pTileset->updateViewGroupOffline(
+        this->_pTileset->getDefaultViewGroup(),
+        frustums);
   } else {
     TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::updateView)
-    pResult = &this->_pTileset->updateView(frustums, DeltaTime);
+    pResult = &this->_pTileset->updateViewGroup(
+        this->_pTileset->getDefaultViewGroup(),
+        frustums,
+        DeltaTime);
   }
 
-#pragma region Das
-	TagSlowTile();
-
-
-#ifdef SHOW_3DTILES_LOAD_TIME
-  std::vector<std::string> vecTiles;
-  this->_pTileset->getLoadedTiles(vecTiles);
-
-  FDateTime time = FDateTime::Now();
-  for (const std::string& tile : vecTiles) {
-    std::string tileID = CesiumUtility::Uri::uriPathToNativePath(tile);
-    FString strTileID = UTF8_TO_TCHAR(tileID.c_str());
-    FString strFileName = FPaths::GetCleanFilename(strTileID);
-    UE_LOG(
-        LogCesium,
-        Log, TEXT("Loaded Tile: %s"), *strFileName);
-
-    {
-      std::lock_guard<std::mutex> lock(mmutex);
-      mmapTile2TimeBeignLoad.Add(strFileName, time);
-    }
+  {
+    TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::loadTiles)
+    this->_pTileset->loadTiles();
   }
-  this->_pTileset->clearLoadedTiles();
-#endif
-
-#pragma endregion
 
   updateLastViewUpdateResultState(*pResult);
 
-#pragma region Das
-  if (CreatePhysicsMeshes)
-  {
-		removeCollisionForTiles(pResult->tilesFadingOut);
-  }
-#pragma endregion
+  removeCollisionForTiles(pResult->tilesFadingOut);
 
   removeVisibleTilesFromList(
-      _tilesToHideNextFrame,
+      this->_tilesToHideNextFrame,
       pResult->tilesToRenderThisFrame);
-  hideTiles(_tilesToHideNextFrame);
+  hideTiles(this->_tilesToHideNextFrame);
 
   _tilesToHideNextFrame.clear();
-  for (Cesium3DTilesSelection::Tile* pTile : pResult->tilesFadingOut) {
+  for (const CesiumUtility::IntrusivePointer<Cesium3DTilesSelection::Tile>&
+           pTile : pResult->tilesFadingOut) {
     Cesium3DTilesSelection::TileRenderContent* pRenderContent =
         pTile->getContent().getRenderContent();
     if (!this->UseLodTransitions ||
@@ -2330,238 +2336,65 @@ void ACesium3DTileset::RuntimeSettingsChanged(
 }
 #endif
 
-#pragma region Das
-void ACesium3DTileset::WriteSlowTilesToJson() {
-	if (!IsHoldSlowTileAndBeginPlay())
+std::vector<FCesiumCamera> ACesium3DTileset::Create360Cameras(const FCesiumCamera& baseCamera) const
+{
+	std::vector<FCesiumCamera> cameras;
+	cameras.reserve(24);
+
+	// 水平8个方向（每45度一个）
+	const int32 nHorizontalCount = 8;
+	const int32 nVerticalCount = 3; // 上、中、下3个层级
+	const double dHorizontalAngleStep = 360.0 / nHorizontalCount; // 45度
+	const double dVerticalAngleStep = 180 / nVerticalCount; // 上下30度间隔
+
+	FVector baseLocation = baseCamera.Location;
+	FRotator baseRotation = baseCamera.Rotation;
+
+	for (int32 vIndex = 0; vIndex < nVerticalCount; vIndex++)
 	{
-		return;
-	}
-
-	// 获取项目目录
-	FString ProjectDir = FPaths::ProjectDir();
-	FString JsonFileName = ProjectDir / (Url + TEXT("_slowTiles.json"));
-
-	// 将 msetSetSlows 转换为 JSON 数组
-	TArray<TSharedPtr<FJsonValue>> JsonArray;
-	for (const FString& Tile : msetSetSlows) {
-		JsonArray.Add(MakeShared<FJsonValueString>(Tile));
-	}
-
-	// 创建 JSON 对象
-	TSharedPtr<FJsonObject> JsonObject = MakeShared<FJsonObject>();
-	JsonObject->SetArrayField(TEXT("SlowTiles"), JsonArray);
-
-	// 将 JSON 对象序列化为字符串
-	FString JsonString;
-	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&JsonString);
-	if (FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer)) {
-		// 将 JSON 字符串写入文件
-		if (FFileHelper::SaveStringToFile(JsonString, *JsonFileName)) {
-			UE_LOG(LogTemp, Log, TEXT("Successfully wrote slow tiles to %s"), *JsonFileName);
+		if (vIndex != TestIndex)
+		{
+			//continue;
 		}
-		else {
-			UE_LOG(LogTemp, Error, TEXT("Failed to write slow tiles to %s"), *JsonFileName);
-		}
-	}
-	else {
-		UE_LOG(LogTemp, Error, TEXT("Failed to serialize slow tiles to JSON"));
-	}
-}
 
-void ACesium3DTileset::ReadSlowTilesFromJson() {
-	if (!IsHoldSlowTileAndBeginPlay())
-	{
-		return;
-	}
+		// 计算垂直角度偏移：-30度（向下），0度（水平），+30度（向上）
+		double dVerticalOffset = (vIndex - 1) * dVerticalAngleStep;
 
-  msetNeedSetSlow.Empty();
+		for (int32 hIndex = 0; hIndex < nHorizontalCount; hIndex++)
+		{
+			// 计算水平角度偏移
+			double dHorizontalOffset = hIndex * dHorizontalAngleStep;
 
-	// 获取项目目录
-	FString ProjectDir = FPaths::ProjectDir();
-	FString JsonFileName = ProjectDir / (Url + TEXT("_slowTiles.json"));
+			// 创建新的旋转
+			FRotator newRotation = baseRotation;
+			newRotation.Yaw += dHorizontalOffset;
+			newRotation.Pitch += dVerticalOffset;
 
-	// 读取 JSON 文件内容
-	FString JsonString;
-	if (FFileHelper::LoadFileToString(JsonString, *JsonFileName)) {
-		// 解析 JSON 字符串
-		TSharedPtr<FJsonObject> JsonObject;
-		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
-		if (FJsonSerializer::Deserialize(Reader, JsonObject) && JsonObject.IsValid()) {
-			// 清空 msetSetSlows 并填充新数据
-			const TArray<TSharedPtr<FJsonValue>>* JsonArray;
-			if (JsonObject->TryGetArrayField(TEXT("SlowTiles"), JsonArray)) {
-				for (const TSharedPtr<FJsonValue>& Value : *JsonArray) {
-          AddSlowTileThread(Value->AsString());
-				}
-				UE_LOG(LogTemp, Log, TEXT("Successfully read slow tiles from %s"), *JsonFileName);
-			}
-			else {
-				UE_LOG(LogTemp, Warning, TEXT("No 'SlowTiles' field found in %s"), *JsonFileName);
-			}
-		}
-		else {
-			UE_LOG(LogTemp, Error, TEXT("Failed to parse JSON from %s"), *JsonFileName);
+			// 创建新相机
+			FCesiumCamera newCamera(
+				baseCamera.ViewportSize,
+				baseLocation,
+				newRotation,
+				baseCamera.FieldOfViewDegrees,
+				baseCamera.OverrideAspectRatio
+			);
+
+			cameras.push_back(newCamera);
 		}
 	}
-	else {
-		UE_LOG(LogTemp, Warning, TEXT("Failed to read JSON file: %s"), *JsonFileName);
-	}
+
+	// 添加顶部相机（向上90度）
+	FRotator topRotation = baseRotation;
+	topRotation.Pitch = 90.0;
+	FCesiumCamera topCamera(
+		baseCamera.ViewportSize,
+		baseLocation,
+		topRotation,
+		baseCamera.FieldOfViewDegrees,
+		baseCamera.OverrideAspectRatio
+	);
+	cameras.push_back(topCamera);
+
+	return cameras;
 }
-
-bool ACesium3DTileset::IsHoldSlowTileAndBeginPlay()
-{
-  if (mbBeginPlay && HoldSlowTile)
-  {
-    return true;
-  }
-
-  return false;
-}
-
-
-void ACesium3DTileset::AddSlowTileThread(const FString& tile)
-{
-  FString strPath = tile;
-	FPaths::MakePathRelativeTo(strPath, *Url);
-  strPath = strPath.Replace(TEXT("\\"), TEXT("/"));
-
-	// 添加到 msetNeedSetSlow
-	std::lock_guard<std::mutex> lock(mmutexSlowTile);
-	msetNeedSetSlow.Add(strPath);
-}
-
-
-void ACesium3DTileset::GetSlowTileGame(TSet<FString>& setTiles)
-{
-	if (!IsHoldSlowTileAndBeginPlay())
-	{
-		return;
-	}
-
-	std::lock_guard<std::mutex> lock(mmutexSlowTile);
-  setTiles = msetNeedSetSlow;
-}
-
-void ACesium3DTileset::TagSlowTile()
-{
-  if (!IsHoldSlowTileAndBeginPlay())
-  {
-    return;
-  }
-
-  if (!_pTileset)
-  {
-    return;
-  }
-
-  TSet<FString> setNeedSlows;
-  GetSlowTileGame(setNeedSlows);
-
-  TSet<FString> setNewNeed;
-  for (auto item : setNeedSlows)
-  {
-  	if (!msetSetSlows.Contains(item))
-  	{
-      setNewNeed.Add(item);
-		}
-  }
-
-	_pTileset->forEachLoadedTile([setNewNeed, this](const Cesium3DTilesSelection::Tile& tile) {
-    const std::string* pTileId = std::get_if<std::string>(&tile.getTileID());
-    if (pTileId)
-    {
-      FString strTileID = UTF8_TO_TCHAR(pTileId->c_str());
-      for (auto item : setNewNeed)
-      {
-      	
-      }
-
-      if (setNewNeed.Contains(strTileID))
-      {
-				int64_t size = tile.computeByteSize();
-        if (size > 0)
-        {
-					tile.setSlowLoad(true);
-          mnMinNeedCacheSize += size;
-          if (MaximumCachedBytes < mnMinNeedCacheSize)
-          {
-						MaximumCachedBytes = mnMinNeedCacheSize + size;
-          }
-
-					msetSetSlows.Add(strTileID);
-        }
-        else
-        {
-          //还没加载好，下次再tag
-          int a = 0;
-          a++;
-        }
-      }
-    }
-	});
-}
-
-void ACesium3DTileset::CreateTileset(Cesium3DTilesSelection::TilesetExternals& externals, const Cesium3DTilesSelection::TilesetOptions& options)
-{
- switch (this->TilesetSource) {
-  case ETilesetSource::FromEllipsoid:
-    UE_LOG(LogCesium, Log, TEXT("Loading tileset from ellipsoid"));
-    this->_pTileset = TUniquePtr<Cesium3DTilesSelection::Tileset>(
-        Cesium3DTilesSelection::EllipsoidTilesetLoader::createTileset(
-            externals,
-            options)
-            .release());
-    break;
-  case ETilesetSource::FromUrl:
-    UE_LOG(LogCesium, Log, TEXT("Loading tileset from URL %s"), *this->Url);
-    this->_pTileset = MakeUnique<Cesium3DTilesSelection::Tileset>(
-        externals,
-        TCHAR_TO_UTF8(*this->Url),
-        options);
-    break;
-  case ETilesetSource::FromCesiumIon:
-    UE_LOG(
-        LogCesium,
-        Log,
-        TEXT("Loading tileset for asset ID %d"),
-        this->IonAssetID);
-    FString token = this->IonAccessToken.IsEmpty()
-                        ? this->CesiumIonServer->DefaultIonAccessToken
-                        : this->IonAccessToken;
-
-#if WITH_EDITOR
-		this->CesiumIonServer->ResolveApiUrl();
-#endif
-
-		std::string ionAssetEndpointUrl =
-			TCHAR_TO_UTF8(*this->CesiumIonServer->ApiUrl);
-
-		if (!ionAssetEndpointUrl.empty()) {
-			// Make sure the URL ends with a slash
-			if (!ionAssetEndpointUrl.empty() && *ionAssetEndpointUrl.rbegin() != '/')
-				ionAssetEndpointUrl += '/';
-
-			this->_pTileset = MakeUnique<Cesium3DTilesSelection::Tileset>(
-				externals,
-				static_cast<uint32_t>(this->IonAssetID),
-				TCHAR_TO_UTF8(*token),
-				options,
-				ionAssetEndpointUrl);
-		}
-		break;
- }
-}
-
-void ACesium3DTileset::CreateTilesetDas(Cesium3DTilesSelection::TilesetExternals& externals, const Cesium3DTilesSelection::TilesetOptions& options, const Cesium3DTilesSelection::DasTilesetExtra& dasExtra)
-{
-	UE_LOG(LogCesium, Log, TEXT("Loading tileset from URL %s with DasExtra"), *this->Url);
-	this->_pTileset = MakeUnique<Cesium3DTilesSelection::Tileset>(
-		externals,
-		TCHAR_TO_UTF8(*this->Url),
-		options,
-		dasExtra);
-}
-
-#pragma endregion
-
 

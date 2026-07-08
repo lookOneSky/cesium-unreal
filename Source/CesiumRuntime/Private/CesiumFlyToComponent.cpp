@@ -103,12 +103,20 @@ void UCesiumFlyToComponent::FlyToLocationEarthCenteredEarthFixed(
           this->MaximumHeightByDistanceCurve->GetFloatValue(this->_length);
     }
   }
+  
+#pragma region Das
+  _maxHeight *= mfAddHeightSacle;
+#pragma endregion
 
   // Tell the tick we will be flying from now
   this->_canInterruptByMoving = CanInterruptByMoving;
   this->_previousPositionEcef = ecefSource;
   this->_flightInProgress = true;
   this->_destinationEcef = EarthCenteredEarthFixedDestination;
+
+#pragma region Das
+	_previousRotationEcef = GlobeAnchor->GetEastSouthUpRotation();
+#pragma endregion
 }
 
 void UCesiumFlyToComponent::FlyToLocationLongitudeLatitudeHeight(
@@ -200,9 +208,18 @@ void UCesiumFlyToComponent::TickComponent(
     return;
   }
 
-  if (this->_canInterruptByMoving &&
-      this->_previousPositionEcef !=
-          GlobeAnchor->GetEarthCenteredEarthFixedPosition()) {
+  if (this->_canInterruptByMoving
+#pragma region Das
+		//适配别的操作器有误差用等于号
+    //适配仅旋转
+    && (!this->_previousPositionEcef.Equals(GlobeAnchor->GetEarthCenteredEarthFixedPosition())
+      //||!_previousRotationEcef.Equals(GlobeAnchor->GetEastSouthUpRotation())
+      )
+    )
+#pragma endregion
+  {
+    FQuat test = GlobeAnchor->GetEastSouthUpRotation();
+    FVector posTest = GlobeAnchor->GetEarthCenteredEarthFixedPosition();
     this->InterruptFlight();
     return;
   }
@@ -241,6 +258,34 @@ void UCesiumFlyToComponent::TickComponent(
     return;
   }
 
+#pragma region Das
+  // 使用虚函数计算插值，允许子类自定义插值方法
+  FVector currentPositionVector;
+  FQuat currentQuat;
+  CalculateFlightInterpolation(flyPercentage, currentPositionVector, currentQuat);
+#pragma endregion
+
+  // Set Location
+  GlobeAnchor->MoveToEarthCenteredEarthFixedPosition(currentPositionVector);
+
+  // Interpolate rotation in the ESU frame. The local ESU ControlRotation will
+  // be transformed to the appropriate world rotation as we fly.
+  this->SetCurrentRotationEastSouthUp(currentQuat);
+
+  this->_previousPositionEcef =
+      GlobeAnchor->GetEarthCenteredEarthFixedPosition();
+
+#pragma region Das
+	_previousRotationEcef = currentQuat;
+#pragma endregion
+}
+
+#pragma region Das
+bool UCesiumFlyToComponent::CalculateFlightInterpolation(
+    float flyPercentage,
+    FVector& OutPosition,
+    FQuat& OutRotation) {
+  // 默认实现：使用原有的插值逻辑
   // Get altitude offset from profile curve if one is specified
   double altitudeOffset = 0.0;
   if (this->_maxHeight != 0.0 && this->HeightPercentageCurve) {
@@ -253,25 +298,20 @@ void UCesiumFlyToComponent::TickComponent(
   glm::dvec3 currentPositionEcef =
       _currentCurve->getPosition(flyPercentage, altitudeOffset);
 
-  FVector currentPositionVector(
+  OutPosition = FVector(
       currentPositionEcef.x,
       currentPositionEcef.y,
       currentPositionEcef.z);
 
-  // Set Location
-  GlobeAnchor->MoveToEarthCenteredEarthFixedPosition(currentPositionVector);
-
-  // Interpolate rotation in the ESU frame. The local ESU ControlRotation will
-  // be transformed to the appropriate world rotation as we fly.
-  FQuat currentQuat = FQuat::Slerp(
+  // Interpolate rotation in the ESU frame
+  OutRotation = FQuat::Slerp(
       this->_sourceRotation,
       this->_destinationRotation,
       flyPercentage);
-  this->SetCurrentRotationEastSouthUp(currentQuat);
 
-  this->_previousPositionEcef =
-      GlobeAnchor->GetEarthCenteredEarthFixedPosition();
+  return true;
 }
+#pragma endregion
 
 FQuat UCesiumFlyToComponent::GetCurrentRotationEastSouthUp() {
   if (this->RotationToUse != ECesiumFlyToRotation::Actor) {

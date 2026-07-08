@@ -54,6 +54,115 @@ public:
    */
   static const double kMinimumScale;
 
+#pragma region Das
+#ifdef SUPPORT_OLD_VERSION
+
+  //简化升级增加的接口,后续去掉这些接口的使用。glm::dvec3替换为FVector
+	/// <summary>
+	/// 弃用接口,后面要逐步删除 glm::dvec3替换为FVector
+	/// </summary>
+	/// <param name="Ecef"></param>
+	/// <returns></returns>
+  glm::dvec3 TransformEcefToUnreal(const glm::dvec3& ecef) const;
+
+  /// <summary>
+  /// 弃用接口,后面要逐步删除 glm::dvec3替换为FVector
+  /// </summary>
+  /// <param name="Ecef"></param>
+  /// <returns></returns>
+  glm::dvec3 TransformEcefToLongitudeLatitudeHeight(const glm::dvec3& Ecef) const;
+
+  /// <summary>
+  /// 弃用接口,后面要逐步删除 glm::dvec3替换为FVector
+  /// </summary>
+  /// <param name="LongitudeLatitudeHeight"></param>
+  /// <returns></returns>
+  glm::dvec3 TransformLongitudeLatitudeHeightToEcef(
+	  const glm::dvec3& LongitudeLatitudeHeight) const;
+
+  /// <summary>
+  /// 弃用接口,后面要逐步删除 glm::dvec3替换为FVector
+  /// </summary>
+  /// <param name="longitudeLatitudeHeight"></param>
+  /// <returns></returns>
+  glm::dvec3 TransformLongitudeLatitudeHeightToUnreal(
+	  const glm::dvec3& longitudeLatitudeHeight) const;
+
+  /// <summary>
+  /// 弃用接口,后面要逐步删除 glm::dvec3替换为FVector
+  /// </summary>
+  /// <param name="unreal"></param>
+  /// <returns></returns>
+  glm::dvec3 TransformUnrealToEcef(const glm::dvec3& unreal) const;
+
+  /// <summary>
+  /// 弃用接口,后面要逐步删除 glm::dvec3替换为FVector
+  /// </summary>
+  /// <param name="unreal"></param>
+  /// <returns></returns>
+  glm::dvec3 TransformUnrealToLongitudeLatitudeHeight(const glm::dvec3& unreal) const;
+
+  /// <summary>
+  /// 兼容旧接口，后续不要使用。用新接口替代
+  /// </summary>
+  /// <param name="EastSouthUpRotator"></param>
+  /// <param name="UnrealLocation"></param>
+  /// <returns></returns>
+  FRotator TransformRotatorEastSouthUpToUnreal(
+	  const FRotator& EsuRotator,
+	  const FVector& UnrealLocation) const;
+
+  FRotator TransformRotatorUnrealToEastSouthUp(
+	  const FRotator& UnrealRotator,
+	  const FVector& UnrealLocation) const;
+
+  /// <summary>
+  /// 兼容旧接口，后续不要使用。用新接口替代
+  /// </summary>
+  /// <param name="EastSouthUpRotator"></param>
+  /// <param name="UnrealLocation"></param>
+  /// <returns></return
+  FVector TransformUnrealToLongitudeLatitudeHeight(
+	  const FVector& Unreal) const;
+
+  FVector TransformLongitudeLatitudeHeightToUnreal(
+	  const FVector& LongitudeLatitudeHeight) const;
+
+  /// <summary>
+  /// 兼容旧接口，后续不要使用。用新接口替代
+  /// </summary>
+  /// <param name="Ecef"></param>
+  /// <returns></returns>
+  FVector TransformEcefToUnreal(const FVector& Ecef) const;
+
+  /// <summary>
+  /// 兼容旧接口，后续不要使用。用新接口替代
+  /// </summary>
+  /// <param name="Ecef"></param>
+  /// <returns></returns>
+  FVector TransformUnrealToEcef(const FVector& Ecef) const;
+
+  /**
+  * Computes the rotation matrix from the local East-South-Up to Unreal at the
+  * specified Unreal world location (relative to the floating
+  * origin). The returned transformation works in Unreal's left-handed
+  * coordinate system.
+  */
+  FMatrix ComputeEastSouthUpToUnreal(const FVector& Unreal) const;
+
+  /// <summary>
+  /// 兼容旧接口，后续不要使用。用新接口替代
+  /// </summary>
+  /// <param name="Ecef"></param>
+  /// <returns></returns>
+  void SetGeoreferenceOriginLongitudeLatitudeHeight(const FVector& TargetLongitudeLatitudeHeight);
+ 
+  void SetAutoChangeTheGeoReference(bool enable);
+
+  bool GetAutoChangeTheGeoReference();
+#endif
+#pragma endregion
+
   /**
    * Finds and returns a CesiumGeoreference in the world. It searches in the
    * following order:

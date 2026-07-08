@@ -9,7 +9,7 @@
  * A component that represents and renders a glTF points primitive.
  */
 UCLASS()
-class UCesiumGltfPointsComponent : public UCesiumGltfPrimitiveComponent {
+class CESIUMRUNTIME_API UCesiumGltfPointsComponent : public UCesiumGltfPrimitiveComponent {
   GENERATED_BODY()
 
 public:

@@ -18,7 +18,10 @@
  * Editor can't be further changed, so the the mirrored list is still valid.
  */
 UCLASS()
-class UCesiumMaterialUserData : public UAssetUserData {
+#pragma region Das
+class CESIUMRUNTIME_API UCesiumMaterialUserData : public UAssetUserData {
+#pragma endregion
+
   GENERATED_BODY()
 
 public:

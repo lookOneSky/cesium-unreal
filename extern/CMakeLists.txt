@@ -55,7 +55,11 @@ endif()
 set(PRIVATE_CESIUM_SQLITE ON)
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreadedDLL)
+
+#add jiangshuo
 set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_LIST_DIR}/../Source/ThirdParty)
+#set(CMAKE_INSTALL_PREFIX F:/CodeAll/DasLFYH/Plugins/cesium-unreal/Source/ThirdParty)
+
 set(CMAKE_INSTALL_LIBDIR ${CMAKE_INSTALL_PREFIX}/lib/${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}-$<IF:$<CONFIG:Debug>,Debug,Release>)
 
 # Always define NDEBUG, since Unreal does in debug anyway.

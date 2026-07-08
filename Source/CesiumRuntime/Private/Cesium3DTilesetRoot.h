@@ -8,7 +8,9 @@
 #include "Cesium3DTilesetRoot.generated.h"
 
 UCLASS()
-class UCesium3DTilesetRoot : public USceneComponent {
+#pragma region Das
+class CESIUMRUNTIME_API UCesium3DTilesetRoot : public USceneComponent {
+#pragma endregion
   GENERATED_BODY()
 
 public:

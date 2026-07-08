@@ -56,7 +56,9 @@ struct FRasterOverlayTile {
 };
 
 UCLASS()
-class UCesiumGltfComponent : public USceneComponent {
+#pragma region Das
+class CESIUMRUNTIME_API UCesiumGltfComponent : public USceneComponent {
+#pragma endregion
   GENERATED_BODY()
 
 public:
@@ -76,7 +78,8 @@ public:
       const glm::dmat4x4& Transform,
       CreateGltfOptions::CreateModelOptions&& Options,
       const CesiumGeospatial::Ellipsoid& Ellipsoid =
-          CesiumGeospatial::Ellipsoid::WGS84);
+          CesiumGeospatial::Ellipsoid::WGS84,
+      GltfCreateProcessBase* pProcess = nullptr);
 
   static UCesiumGltfComponent* CreateOnGameThread(
       CesiumGltf::Model& model,
@@ -134,7 +137,17 @@ public:
 
   void UpdateFade(float fadePercentage, bool fadingIn);
 
+#pragma region Das
+  void SetLimitCollisionUpdate(bool bLimit);
+#pragma endregion
+
 private:
   UPROPERTY()
   UTexture2D* Transparent1x1 = nullptr;
+
+#pragma region Das
+  ECollisionEnabled::Type mnLastType = ECollisionEnabled::NoCollision;
+  bool mbLimitCollisionUpdate = false;//是否限制3Dtiles的碰撞更新，瓦块多情况下更新主线程卡顿
+#pragma endregion
+
 };

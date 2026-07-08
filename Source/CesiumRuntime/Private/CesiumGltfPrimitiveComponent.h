@@ -25,8 +25,10 @@ struct MeshPrimitive;
  * from triangles.
  */
 UCLASS()
-class UCesiumGltfPrimitiveComponent : public UStaticMeshComponent,
+#pragma region Das
+class CESIUMRUNTIME_API UCesiumGltfPrimitiveComponent : public UStaticMeshComponent,
                                       public ICesiumPrimitive {
+#pragma endregion
   GENERATED_BODY()
 
 public:
@@ -46,6 +48,9 @@ public:
 
 private:
   CesiumPrimitiveData _cesiumData;
+#pragma region Das
+	bool mbDrawBound = false;
+#pragma endregion
 };
 
 /**

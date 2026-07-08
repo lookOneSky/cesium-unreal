@@ -22,7 +22,9 @@
  * computations with `double` precision.
  *
  */
-class VecMath {
+#pragma region Das
+class CESIUMRUNTIME_API VecMath {
+#pragma endregion
 public:
   /**
    * @brief Create a `glm` 4x4 matrix from the given `FMatrix`.

@@ -31,6 +31,11 @@ public:
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cesium")
   TArray<TSoftObjectPtr<ACesiumCartographicPolygon>> Polygons;
 
+#pragma region Das
+	TArray<TWeakObjectPtr<ACesiumCartographicPolygon>> mPolygons;//TSoftObjectPtr 不支持levelInstance模式
+#pragma endregion
+
+
   /**
    * Whether to invert the selection specified by the polygons.
    *
@@ -65,7 +70,9 @@ protected:
       Cesium3DTilesSelection::Tileset* pTileset,
       CesiumRasterOverlays::RasterOverlay* pOverlay) override;
 
-private:
+#pragma region Das
+protected:
+#pragma endregion
   std::shared_ptr<Cesium3DTilesSelection::RasterizedPolygonsTileExcluder>
       _pExcluder;
 };

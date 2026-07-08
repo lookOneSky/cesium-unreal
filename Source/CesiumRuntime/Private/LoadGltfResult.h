@@ -28,6 +28,11 @@
 #include <unordered_map>
 #include <vector>
 
+#pragma region Das
+#include "CesiumEncodedMetadataUtility.h"
+#pragma endregion
+
+
 namespace LoadGltfResult {
 /**
  * Represents the result of loading a glTF primitive on a load thread.
@@ -152,6 +157,13 @@ struct LoadedPrimitiveResult {
    */
   CesiumGltf::IndexAccessorType IndexAccessor;
 
+#pragma region Das
+  /**
+   * Primitive的渲染模式(TRIANGLES/POINTS等)
+   */
+  int32_t primitiveMode = 4; // 默认为TRIANGLES
+#pragma endregion
+
 #pragma endregion
 };
 
@@ -207,5 +219,10 @@ struct LoadedModelResult {
   /** For backwards compatibility with CesiumEncodedMetadataComponent. */
   std::optional<CesiumEncodedMetadataUtility::EncodedMetadata>
       EncodedMetadata_DEPRECATED{};
+
+#pragma region Das
+  bool IsBigNumTex = false;
+#pragma endregion
+
 };
 } // namespace LoadGltfResult

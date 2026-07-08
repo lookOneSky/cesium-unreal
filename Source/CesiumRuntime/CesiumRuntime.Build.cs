@@ -68,7 +68,9 @@ public class CesiumRuntime : ModuleRules
             }
         }
 
-        string libPath = useDebug ? libPathDebug : libPathRelease;
+    	//add jiangs
+    	useDebug = false;
+		string libPath = useDebug ? libPathDebug : libPathRelease;
 
         string[] allLibs = Directory.Exists(libPath) ? Directory.GetFiles(libPath, libSearchPattern) : new string[0];
 
@@ -117,13 +119,22 @@ public class CesiumRuntime : ModuleRules
                 "TIDY_STATIC",
                 "URI_STATIC_BUILD",
                 "SWL_VARIANT_NO_CONSTEXPR_EMPLACE",
+				        //add jiangs
+				        "SUPPORT_OLD_VERSION",
+                //"SHOW_3DTILES_LOAD_TIME"//输出瓦块的各阶段时间
                 // Define to record the state of every tile, every frame, to a SQLite database.
                 // The database will be found in [Project Dir]/Saved/CesiumDebugTileStateDatabase.
                 // "CESIUM_DEBUG_TILE_STATES",
             }
         );
 
-        PrivateDependencyModuleNames.Add("Chaos");
+        PrivateDependencyModuleNames.AddRange(new string[] {
+          "Chaos",
+		      //add jiangs
+          "DeveloperSettings",
+          "Json",
+          "JsonUtilities"
+        });
 
         if (Target.bBuildEditor == true)
         {

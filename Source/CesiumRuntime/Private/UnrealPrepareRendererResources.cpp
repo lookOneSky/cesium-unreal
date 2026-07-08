@@ -12,6 +12,14 @@
 #include <CesiumGeospatial/Ellipsoid.h>
 #include <glm/mat4x4.hpp>
 
+#pragma region Das
+THIRD_PARTY_INCLUDES_START
+#include "CesiumUtility/Uri.h"
+THIRD_PARTY_INCLUDES_END
+#include "DasCesium/GltfCreateProcessBase.h"
+#pragma endregion
+
+
 UnrealPrepareRendererResources::UnrealPrepareRendererResources(
     ACesium3DTileset* pActor)
     : _pActor(pActor) {}
@@ -45,12 +53,83 @@ UnrealPrepareRendererResources::prepareInLoadThread(
 
   const CesiumGeospatial::Ellipsoid& ellipsoid = tileLoadResult.ellipsoid;
 
-  CesiumAsync::Future<UCesiumGltfComponent::CreateOffGameThreadResult>
-      pHalfFuture = UCesiumGltfComponent::CreateOffGameThread(
-          asyncSystem,
-          transform,
-          std::move(options),
-          ellipsoid);
+#pragma region Das
+  CesiumGltf::Model& model = *options.pModel;
+  std::string name = "glTF";
+  const auto urlIt = model.extras.find("Cesium3DTiles_TileUrl");
+  FString strTileID;
+  if (urlIt != model.extras.end())
+  {
+    name = urlIt->second.getStringOrDefault("glTF");
+    std::string nameCh = CesiumUtility::Uri::uriPathToNativePath(name);
+    strTileID = UTF8_TO_TCHAR(nameCh.c_str());
+
+#ifdef SHOW_3DTILES_LOAD_TIME
+    FString strFileName = FPaths::GetCleanFilename(strTileID);  
+    {
+      std::lock_guard<std::mutex> lock(_pActor->mmutex);
+
+      if (this->_pActor->mmapTile2TimeBeignLoad.Contains(strFileName)) {
+        float fTimeSpan = (FDateTime::Now() -
+                           this->_pActor->mmapTile2TimeBeignLoad[strFileName])
+                .GetTotalMilliseconds();
+
+        if (fTimeSpan > 10000)
+        {
+          int a = 0;
+          a++;
+        }
+
+        UE_LOG(
+            LogCesium,
+            Log,
+            TEXT("prepareInLoadThread: %s, time span %f"),
+            *FString(strFileName),
+            fTimeSpan);
+        _pActor->mmapTile2TimeBeignLoad.Remove(strFileName);
+
+      } else {
+        int a = 0;
+        a++;
+      }
+    }
+
+		{
+			std::lock_guard<std::mutex> lock(_pActor->mmutex);
+			this->_pActor->mmapTile2LoadFinish.Add(strFileName, FDateTime::Now());
+		}
+#endif
+	}
+
+	FDateTime timeBefore = FDateTime::Now();
+
+  //add Das
+  GltfCreateProcessBase* pProcess = this->_pActor->CreateGltfCreateProcess(tileLoadResult);
+  // 设置包围盒到GltfCreateProcessBase
+  if (pProcess)
+  {
+    pProcess->SetBoundingVolume(tileLoadResult.tileBoundingVolume);
+  }
+#pragma endregion
+
+	CesiumAsync::Future<UCesiumGltfComponent::CreateOffGameThreadResult>
+		pHalfFuture = UCesiumGltfComponent::CreateOffGameThread(
+			asyncSystem,
+			transform,
+			std::move(options),
+#pragma region Das
+			ellipsoid,
+			pProcess
+      );
+#pragma endregion
+
+#pragma region Das
+	float fTimeSpan = (FDateTime::Now() - timeBefore).GetTotalMilliseconds();
+	if (fTimeSpan > _pActor->mnMillSecondSlow)
+	{
+		_pActor->AddSlowTileThread(strTileID);
+	}
+#pragma endregion
 
   return MoveTemp(pHalfFuture)
       .thenImmediately(
@@ -92,6 +171,9 @@ void UnrealPrepareRendererResources::free(
     Cesium3DTilesSelection::Tile& tile,
     void* pLoadThreadResult,
     void* pMainThreadResult) noexcept {
+#pragma region Das
+	TRACE_CPUPROFILER_EVENT_SCOPE(UnrealPrepareRendererResources::free);
+#pragma endregion
   if (pLoadThreadResult) {
     UCesiumGltfComponent::HalfConstructed* pHalf =
         reinterpret_cast<UCesiumGltfComponent::HalfConstructed*>(
@@ -100,6 +182,24 @@ void UnrealPrepareRendererResources::free(
   } else if (pMainThreadResult) {
     UCesiumGltfComponent* pGltf =
         reinterpret_cast<UCesiumGltfComponent*>(pMainThreadResult);
+
+#pragma region Das
+		//TileID在Cesium3Dtile中，msetSetSlows存在的话打印日志
+		const std::string* pTileId = std::get_if<std::string>(&tile.getTileID());
+		if (pTileId) {
+			FString TileID = UTF8_TO_TCHAR(pTileId->c_str());
+
+			// 检查 TileID 是否存在于 msetSetSlows
+			if (_pActor->msetSetSlows.Contains(TileID)) {
+				UE_LOG(
+					LogCesium,
+					Warning,
+					TEXT("TileID %s exists in msetSetSlows."),
+					*TileID);
+			}
+		}
+#pragma endregion
+
     CesiumLifetime::destroyComponentRecursively(pGltf);
   }
 }

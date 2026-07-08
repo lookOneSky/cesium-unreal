@@ -124,6 +124,7 @@ void UCesiumRasterOverlay::RemoveFromTileset() {
   this->_pOverlay->getAsyncDestructionCompleteEvent(getAsyncSystem())
       .thenInMainThread([this]() { --this->_overlaysBeingDestroyed; });
 
+  //子关卡3Dtiles overlay事件循环异常会崩溃
   this->OnRemove(pTileset, this->_pOverlay);
   pTileset->getOverlays().remove(this->_pOverlay);
   this->_pOverlay = nullptr;
@@ -201,6 +202,7 @@ bool UCesiumRasterOverlay::IsReadyForFinishDestroy() {
     getAssetAccessor()->tick();
     getAsyncSystem().dispatchMainThreadTasks();
   }
+	UE_LOG(LogCesium, Warning, TEXT("UCesiumRasterOverlay ready Destroy"));
 
   return ready;
 }

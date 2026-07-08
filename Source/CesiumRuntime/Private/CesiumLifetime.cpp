@@ -13,13 +13,23 @@
 #include "Runtime/Launch/Resources/Version.h"
 #include "StaticMeshResources.h"
 #include "UObject/Object.h"
+#include "Engine/Engine.h"
 #include <algorithm>
 
 /*static*/
 AmortizedDestructor CesiumLifetime::amortizedDestructor = AmortizedDestructor();
 
 /*static*/ void CesiumLifetime::destroy(UObject* pObject) {
-  amortizedDestructor.destroy(pObject);
+#pragma region Das
+	if (!amortizedDestructor.mbForbitDefualtGC)
+	{
+		amortizedDestructor.destroy(pObject);
+	}
+	else
+	{
+		amortizedDestructor.addToPending(pObject);
+	}
+#pragma endregion
 }
 
 /*static*/ void
@@ -59,7 +69,32 @@ CesiumLifetime::destroyComponentRecursively(USceneComponent* pComponent) {
   UE_LOG(LogCesium, VeryVerbose, TEXT("Destroying scene component done"));
 }
 
-void AmortizedDestructor::Tick(float DeltaTime) { processPending(); }
+#pragma region Das
+void CesiumLifetime::ForbitDefualtGC(bool bForbit)
+{
+	amortizedDestructor.mbForbitDefualtGC = bForbit;
+}
+
+void CesiumLifetime::TickLimitTime(float remainTime)
+{
+	if (!amortizedDestructor.mbForbitDefualtGC)
+	{
+		return;
+	}
+
+	amortizedDestructor.ProcessLimitTime(remainTime);
+}
+
+void AmortizedDestructor::Tick(float DeltaTime)
+{
+	if (mbForbitDefualtGC)
+	{
+		return;
+	}
+
+	processPending();
+}
+#pragma endregion
 
 ETickableTickType AmortizedDestructor::GetTickableTickType() const {
   return ETickableTickType::Always;
@@ -75,6 +110,23 @@ void AmortizedDestructor::destroy(UObject* pObject) {
   if (!runDestruction(pObject)) {
     addToPending(pObject);
   }
+
+#pragma region Das
+  else
+  {
+	  if (mbForbitDefualtGC)
+	  {
+		  FDateTime begin = FDateTime::Now();
+		  GEngine->PerformGarbageCollectionAndCleanupActors();
+		  FDateTime end = FDateTime::Now();
+		  if ((end - begin).GetTotalMilliseconds() > 10)
+		  {
+			  int a = 0;
+			  a++;
+		  }
+	  }
+  }
+#pragma endregion
 }
 
 bool AmortizedDestructor::runDestruction(UObject* pObject) const {
@@ -111,6 +163,29 @@ bool AmortizedDestructor::runDestruction(UObject* pObject) const {
 void AmortizedDestructor::addToPending(UObject* pObject) {
   _pending.Add(pObject);
 }
+
+#pragma region Das
+void AmortizedDestructor::ProcessLimitTime(float fRemainTime)
+{
+	std::swap(_nextPending, _pending);
+	_pending.Empty();
+
+	FDateTime timeBegin = FDateTime::Now();
+	for (int i = 0; i < _nextPending.Num(); i++)
+	{
+		destroy(_nextPending[i].Get(true));
+		if ((FDateTime::Now() - timeBegin).GetTotalMilliseconds() > fRemainTime)
+		{
+			for (int j = i + 1; j < _nextPending.Num(); j++)
+			{
+				addToPending(_nextPending[j].Get(true));
+			}
+
+			break;
+		}
+	}
+}
+#pragma endregion
 
 void AmortizedDestructor::processPending() {
   std::swap(_nextPending, _pending);

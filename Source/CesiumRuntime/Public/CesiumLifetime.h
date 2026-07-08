@@ -18,9 +18,15 @@ public:
   TStatId GetStatId() const;
   void destroy(UObject* pObject);
 
+#pragma region Das
+  void addToPending(UObject* pObject);
+  void ProcessLimitTime(float fRemainTime);
+public:
+	bool mbForbitDefualtGC = false;
+#pragma endregion
+
 private:
   bool runDestruction(UObject* pObject) const;
-  void addToPending(UObject* pObject);
   void processPending();
   void finalizeDestroy(UObject* pObject) const;
 
@@ -28,10 +34,14 @@ private:
   TArray<TWeakObjectPtr<UObject>> _nextPending;
 };
 
-class CesiumLifetime {
+class CESIUMRUNTIME_API CesiumLifetime {
 public:
   static void destroy(UObject* pObject);
   static void destroyComponentRecursively(USceneComponent* pComponent);
+#pragma region Das
+  static void ForbitDefualtGC(bool bForbit);
+  static void TickLimitTime(float fRemainTime);
+#pragma endregion
 
 private:
   static AmortizedDestructor amortizedDestructor;

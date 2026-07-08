@@ -28,10 +28,23 @@ UCesiumPolygonRasterOverlay::CreateOverlay(
   std::vector<CartographicPolygon> polygons;
   polygons.reserve(this->Polygons.Num());
 
-  for (auto& pPolygon : this->Polygons) {
-    if (!pPolygon) {
-      continue;
+#pragma region Das
+  //动态关卡下获取失败问题
+  for (int i = 0; i < Polygons.Num(); i++) {
+    ACesiumCartographicPolygon* pPolygon = nullptr;
+    pPolygon = Polygons[i].Get();
+    if (!pPolygon)
+    {
+      if (mPolygons.Num() > i)
+      {
+        pPolygon = mPolygons[i].Get();
+      }
     }
+#pragma endregion
+
+		if (!pPolygon) {
+			continue;
+		}
 
     CartographicPolygon polygon =
         pPolygon->CreateCartographicPolygon(worldToTileset);

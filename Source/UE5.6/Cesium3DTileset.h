@@ -37,9 +37,6 @@ class ACesiumCameraManager;
 class UCesiumBoundingVolumePoolComponent;
 class CesiumViewExtension;
 struct FCesiumCamera;
-#pragma region Das
-class GltfCreateProcessBase;
-#pragma endregion
 
 namespace Cesium3DTilesSelection {
 class Tileset;
@@ -100,9 +97,7 @@ public:
   ACesium3DTileset();
   virtual ~ACesium3DTileset();
 
-#pragma region Das
-protected:
-#pragma endregion
+private:
   UPROPERTY(VisibleAnywhere, Category = "Cesium") USceneComponent* Root;
 
   UPROPERTY(
@@ -697,9 +692,7 @@ public:
       meta = (EditCondition = "UseLodTransitions", EditConditionHides))
   float LodTransitionLength = 0.5f;
 
-#pragma region Das
- protected:
-#pragma endregion
+private:
   UPROPERTY(BlueprintGetter = GetLoadProgress, Category = "Cesium")
   float LoadProgress = 0.0f;
 
@@ -1129,11 +1122,8 @@ public:
   UFUNCTION(BlueprintSetter, Category = "Cesium|Rendering")
   void SetIgnoreKhrMaterialsUnlit(bool bIgnoreKhrMaterialsUnlit);
 
-#pragma region Das
-  // 虚函数，允许子类重写材质获取逻辑 // Virtual function to allow derived classes to override material retrieval logic
   UFUNCTION(BlueprintGetter, Category = "Cesium|Rendering")
-  virtual UMaterialInterface* GetMaterial() const { return Material; }
-#pragma endregion
+  UMaterialInterface* GetMaterial() const { return Material; }
 
   UFUNCTION(BlueprintSetter, Category = "Cesium|Rendering")
   void SetMaterial(UMaterialInterface* InMaterial);
@@ -1244,25 +1234,17 @@ protected:
       FVector NormalImpulse,
       const FHitResult& Hit) override;
 
-#pragma region Das
-protected:
-  virtual void DestroyTileset();
-#pragma endregion
-
 private:
   void LoadTileset();
+  void DestroyTileset();
 
   static Cesium3DTilesSelection::ViewState CreateViewStateFromViewParameters(
       const FCesiumCamera& camera,
       const glm::dmat4& unrealWorldToTileset,
       UCesiumEllipsoid* ellipsoid);
 
-#pragma region Das
-protected:
-  //add virtaul remove const
-  virtual std::vector<FCesiumCamera> GetCameras();
-  virtual std::vector<FCesiumCamera> GetPlayerCameras() const;
-#pragma endregion
+  std::vector<FCesiumCamera> GetCameras() const;
+  std::vector<FCesiumCamera> GetPlayerCameras() const;
   std::vector<FCesiumCamera> GetSceneCaptures() const;
 
 public:
@@ -1307,8 +1289,8 @@ private:
    *
    * @param tiles The tiles
    */
-  void
-  showTilesToRender(const std::vector<Cesium3DTilesSelection::Tile*>& tiles);
+  void showTilesToRender(const std::vector<CesiumUtility::IntrusivePointer<
+                             Cesium3DTilesSelection::Tile>>& tiles);
 
   /**
    * Will be called after the tileset is loaded or spawned, to register
@@ -1336,33 +1318,7 @@ private:
       struct FPropertyChangedEvent& changed);
 #endif
 
-public:
-#pragma region Das
-  /**
-   * 创建Tileset实例
-   * 可重写此方法以自定义Tileset创建逻辑
-   */
-  virtual void CreateTileset(Cesium3DTilesSelection::TilesetExternals& externals, const Cesium3DTilesSelection::TilesetOptions& options);
-
-  /**
-   * jiangs 有跨插件的静态成员 can only create here
-   * @brief 通过URL创建Tileset实例（带Das扩展参数）
-   * @param externals 外部接口
-   * @param options Tileset配置选项
-   * @param dasExtra Das扩展参数
-   */
-  void CreateTilesetDas(Cesium3DTilesSelection::TilesetExternals& externals, const Cesium3DTilesSelection::TilesetOptions& options, const Cesium3DTilesSelection::DasTilesetExtra& dasExtra);
-
-  /**
-   * 创建Gltf处理流程实例
-   * 可重写此方法以自定义Gltf加载和渲染流程
-   * @param tileLoadResult Tile加载结果
-   * @return Gltf处理流程实例，返回nullptr使用默认流程
-   */
-  virtual class GltfCreateProcessBase* CreateGltfCreateProcess(Cesium3DTilesSelection::TileLoadResult& tileLoadResult);
-
-protected:
-#pragma endregion
+private:
   TUniquePtr<Cesium3DTilesSelection::Tileset> _pTileset;
 
 #ifdef CESIUM_DEBUG_TILE_STATES
@@ -1410,61 +1366,21 @@ protected:
   // If we find a way to clear the wrong occlusion information in the
   // Unreal Engine, then this field may be removed, and the
   // tilesToHideThisFrame may be hidden immediately.
-  std::vector<Cesium3DTilesSelection::Tile*> _tilesToHideNextFrame;
+  std::vector<CesiumUtility::IntrusivePointer<Cesium3DTilesSelection::Tile>>
+      _tilesToHideNextFrame;
 
   int32 _tilesetsBeingDestroyed;
 
   friend class UnrealPrepareRendererResources;
   friend class UCesiumGltfPointsComponent;
 
-public:
+
 #pragma region Das
-	// Writes msetSetSlows to a JSON file
-	UFUNCTION(BlueprintCallable, Category = "DasModelTileset")
-	void WriteSlowTilesToJson();
-
-	// Reads msetSetSlows from a JSON file
-	UFUNCTION(BlueprintCallable, Category = "DasModelTileset")
-	void ReadSlowTilesFromJson();
-
-	UFUNCTION(BlueprintCallable, Category = "DasModelTileset")
-  bool IsHoldSlowTileAndBeginPlay();
-
-  void AddSlowTileThread(const FString& tile);
-	void GetSlowTileGame(TSet<FString>& setTiles);
-  void TagSlowTile();
-
-#ifdef SHOW_3DTILES_LOAD_TIME
-  //统计瓦块时常。这里是测试代码
-	TMap<FString, FDateTime> mmapTile2TimeBeignLoad;
-	TMap<FString, FDateTime> mmapTile2PrepareFinish;
-	TMap<FString, FDateTime> mmapTile2LoadFinish;
-  std::mutex mmutex;
-#endif
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DasModelTileset")
-	bool HoldSlowTile = false;//ktx转纹理使用
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Transient, Category = "DasModelTileset")
-	TSet<FString> msetSetSlows;//记录了的慢速瓦块
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DasModelTileset")
-	bool ForbitBigNumTex = false;//碎纹理瓦块过滤
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DasModelTileset")
-	bool LimitCollisionUpdate = false;//限制碰撞刷新、优化效率
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DasModelTileset")
-	float BoundScale = 1.0;//限制碰撞刷新、优化效率
-
-public:
-	int64 mnMinNeedCacheSize = 0;//需要最小的缓存大小
-  bool mbBeginPlay = false;
-
-  //RenderThrad
-  int mnMillSecondSlow;
-	std::mutex mmutexSlowTile;
-  TSet<FString> msetNeedSetSlow;
-	TMap<FString, float> mTile2Time;
+ public:
+	 UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DasModelTileset")
+	 bool Play360Movie = false;//适配360视频多相机
+	 // 创建360度相机
+	 std::vector<FCesiumCamera> Create360Cameras(const FCesiumCamera& baseCamera) const;
 #pragma endregion
+
 };

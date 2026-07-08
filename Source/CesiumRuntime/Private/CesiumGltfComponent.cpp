@@ -64,6 +64,14 @@
 #include <iostream>
 #include <type_traits>
 
+#pragma region Das
+THIRD_PARTY_INCLUDES_START
+#include "CesiumUtility/Uri.h"
+THIRD_PARTY_INCLUDES_END
+#include "DasCesium/GltfCreateProcessBase.h"
+#pragma endregion
+
+
 #if WITH_EDITOR
 #include "ScopedTransaction.h"
 #endif
@@ -78,7 +86,11 @@ using namespace LoadGltfResult;
 // - Press delete to try to delete it
 // Note that the console gives an error, but also tells you the url associated
 // with it
-#define DEBUG_GLTF_ASSET_NAMES 0
+
+#pragma region Das
+#define DEBUG_GLTF_ASSET_NAMES 1
+#pragma endregion
+
 
 namespace {
 using TMeshVector2 = FVector2f;
@@ -92,6 +104,9 @@ namespace {
 class HalfConstructedReal : public UCesiumGltfComponent::HalfConstructed {
 public:
   LoadedModelResult loadModelResult{};
+#pragma region Das
+  TSharedPtr<GltfCreateProcessBase> pGltfCreatePtr; // Gltf创建过程的扩展指针
+#pragma endregion
 };
 } // namespace
 
@@ -1182,7 +1197,15 @@ static void loadPrimitive(
     const CesiumGltf::Accessor& positionAccessor,
     const CesiumGltf::AccessorView<TMeshVector3>& positionView,
     const TIndexAccessor& indicesView,
-    const CesiumGeospatial::Ellipsoid& ellipsoid) {
+    const CesiumGeospatial::Ellipsoid& ellipsoid,
+#pragma region Das
+    GltfCreateProcessBase* pProcess) {
+
+  if (pProcess && pProcess->IsOnQuickFinish())
+  {
+    return;
+  }
+#pragma endregion
 
   TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::loadPrimitive<T>)
 
@@ -1206,6 +1229,13 @@ static void loadPrimitive(
 
   const std::string name = getPrimitiveName(model, mesh, primitive);
   primitiveResult.name = name;
+
+  std::string nameCh = CesiumUtility::Uri::uriPathToNativePath(name);
+  if (nameCh.find("Tile_-6242_-2522_L26_0uuu6003.b3dm") < nameCh.length())
+  {
+    int a = 0;
+    a++;
+  }
 
   if (positionView.status() != CesiumGltf::AccessorViewStatus::Valid) {
     UE_LOG(
@@ -1486,6 +1516,15 @@ static void loadPrimitive(
   {
     TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::UpdateTextureCoordinates)
 
+#pragma region Das
+    if (pProcess && pProcess->customPrimitiveVertexOffGameThread(StaticMeshBuildVertices, gltfToUnrealTexCoordMap,
+      indices, primitiveResult, options, duplicateVertices))
+    {
+      //地形自定义UV,不再创建默认的UV
+    }
+    else
+#pragma endregion
+    {
     primitiveResult
         .textureCoordinateParameters["baseColorTextureCoordinateIndex"] =
         updateTextureCoordinates(
@@ -1555,6 +1594,9 @@ static void loadPrimitive(
         primitiveResult.overlayTextureCoordinateIDToUVIndex[i] = 0;
       }
     }
+#pragma region Das
+    }
+#pragma endregion
   }
 
   double scale = 1.0 / CesiumPrimitiveData::positionScaleFactor;
@@ -1634,6 +1676,14 @@ static void loadPrimitive(
       }
     }
   }
+
+#pragma region Das
+  std::optional<int> nNumUVNew;
+  if (pProcess)
+  {
+    pProcess->UpdatePrimitiveVertexOffGameThread(primitiveResult, nNumUVNew, transform * yInvertMatrix * scaleMatrix, options, StaticMeshBuildVertices, indices, normalAccessor, duplicateVertices);
+  }
+#pragma endregion
 
   if (needsTangents && !hasTangents) {
     // Use mikktspace to calculate the tangents.
@@ -1739,10 +1789,24 @@ static void loadPrimitive(
   }
 #endif
 
+#pragma region Das
+  //从RenderData加载图元顶点数据的接口
+  if (pProcess)
+  {
+    pProcess->LoadExPrimitiveFromRenderData(
+      primitiveResult, transform, options, StaticMeshBuildVertices, indices, normalAccessor, duplicateVertices);
+  }
+#pragma endregion
+
   primitiveResult.meshIndex = options.pMeshOptions->meshIndex;
   primitiveResult.primitiveIndex = options.primitiveIndex;
   primitiveResult.RenderData = std::move(RenderData);
   primitiveResult.pCollisionMesh = nullptr;
+
+#pragma region Das
+  // 保存primitive mode供Game Thread使用
+  primitiveResult.primitiveMode = primitive.mode;
+#pragma endregion
 
   primitiveResult.transform = transform * yInvertMatrix * scaleMatrix;
 
@@ -1768,7 +1832,10 @@ static void loadIndexedPrimitive(
     const CreatePrimitiveOptions& options,
     const CesiumGltf::Accessor& positionAccessor,
     const CesiumGltf::AccessorView<TMeshVector3>& positionView,
-    const CesiumGeospatial::Ellipsoid& ellipsoid) {
+    const CesiumGeospatial::Ellipsoid& ellipsoid,
+#pragma region Das
+    GltfCreateProcessBase* pProcess) {
+#pragma endregion
   const CesiumGltf::Model& model =
       *options.pMeshOptions->pNodeOptions->pModelOptions->pModel;
   const CesiumGltf::MeshPrimitive& primitive =
@@ -1787,7 +1854,10 @@ static void loadIndexedPrimitive(
         positionAccessor,
         positionView,
         indexAccessor,
-        ellipsoid);
+        ellipsoid,
+#pragma region Das
+        pProcess);
+#pragma endregion
     primitiveResult.IndexAccessor = indexAccessor;
   } else if (
       indexAccessorGltf.componentType ==
@@ -1800,7 +1870,10 @@ static void loadIndexedPrimitive(
         positionAccessor,
         positionView,
         indexAccessor,
-        ellipsoid);
+        ellipsoid,
+#pragma region Das
+        pProcess);
+#pragma endregion
     primitiveResult.IndexAccessor = indexAccessor;
   } else if (
       indexAccessorGltf.componentType ==
@@ -1813,7 +1886,10 @@ static void loadIndexedPrimitive(
         positionAccessor,
         positionView,
         indexAccessor,
-        ellipsoid);
+        ellipsoid,
+#pragma region Das
+        pProcess);
+#pragma endregion
     primitiveResult.IndexAccessor = indexAccessor;
   } else {
     UE_LOG(
@@ -1829,7 +1905,10 @@ static void loadPrimitive(
     LoadedPrimitiveResult& result,
     const glm::dmat4x4& transform,
     const CreatePrimitiveOptions& options,
-    const CesiumGeospatial::Ellipsoid& ellipsoid) {
+    const CesiumGeospatial::Ellipsoid& ellipsoid,
+#pragma region Das
+    GltfCreateProcessBase* pProcess) {
+#pragma endregion
   TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::loadPrimitive)
 
   const CesiumGltf::Model& model =
@@ -1869,7 +1948,10 @@ static void loadPrimitive(
         *pPositionAccessor,
         positionView,
         syntheticIndexBuffer,
-        ellipsoid);
+        ellipsoid,
+#pragma region Das
+        pProcess);
+#pragma endregion
   } else {
     loadIndexedPrimitive(
         result,
@@ -1877,7 +1959,10 @@ static void loadPrimitive(
         options,
         *pPositionAccessor,
         positionView,
-        ellipsoid);
+        ellipsoid,
+#pragma region Das
+        pProcess);
+#pragma endregion
   }
   result.PositionAccessor = std::move(positionView);
 }
@@ -1886,7 +1971,10 @@ static void loadMesh(
     std::optional<LoadedMeshResult>& result,
     const glm::dmat4x4& transform,
     CreateMeshOptions& options,
-    const CesiumGeospatial::Ellipsoid& ellipsoid) {
+    const CesiumGeospatial::Ellipsoid& ellipsoid,
+#pragma region Das
+    GltfCreateProcessBase* pProcess) {
+#pragma endregion
 
   TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::loadMesh)
 
@@ -1898,7 +1986,10 @@ static void loadMesh(
   for (size_t i = 0; i < mesh.primitives.size(); i++) {
     CreatePrimitiveOptions primitiveOptions = {&options, &*result, i};
     auto& primitiveResult = result->primitiveResults.emplace_back();
-    loadPrimitive(primitiveResult, transform, primitiveOptions, ellipsoid);
+    loadPrimitive(primitiveResult, transform, primitiveOptions, ellipsoid,
+#pragma region Das
+        pProcess);
+#pragma endregion
 
     // if it doesn't have render data, then it can't be loaded
     if (!primitiveResult.RenderData) {
@@ -2063,7 +2154,10 @@ static void loadNode(
     std::vector<LoadedNodeResult>& loadNodeResults,
     const glm::dmat4x4& transform,
     CreateNodeOptions& options,
-    const CesiumGeospatial::Ellipsoid& ellipsoid) {
+    const CesiumGeospatial::Ellipsoid& ellipsoid,
+#pragma region Das
+    GltfCreateProcessBase* pProcess) {
+#pragma endregion
 
   TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::loadNode)
 
@@ -2136,6 +2230,13 @@ static void loadNode(
         nodeTransform * translation * glm::dmat4(rotationQuat) * scale;
   }
 
+#pragma region Das
+  if (pProcess)
+  {
+    pProcess->loadNode(loadNodeResults, transform, nodeTransform, options);
+  }
+#pragma endregion
+
   int meshId = node.mesh;
   if (meshId >= 0 && meshId < model.meshes.size()) {
     if (const auto* pGpuInstancingExtension =
@@ -2148,7 +2249,10 @@ static void loadNode(
           node.getExtension<CesiumGltf::ExtensionExtInstanceFeatures>());
     }
     CreateMeshOptions meshOptions = {&options, &result, meshId};
-    loadMesh(result.meshResult, nodeTransform, meshOptions, ellipsoid);
+    loadMesh(result.meshResult, nodeTransform, meshOptions, ellipsoid,
+#pragma region Das
+        pProcess);
+#pragma endregion
   }
 
   for (int childNodeId : node.children) {
@@ -2157,7 +2261,10 @@ static void loadNode(
           options.pModelOptions,
           options.pHalfConstructedModelResult,
           &model.nodes[childNodeId]};
-      loadNode(loadNodeResults, nodeTransform, childNodeOptions, ellipsoid);
+      loadNode(loadNodeResults, nodeTransform, childNodeOptions, ellipsoid,
+#pragma region Das
+          pProcess);
+#pragma endregion
     }
   }
 }
@@ -2308,12 +2415,19 @@ loadModelAnyThreadPart(
     const CesiumAsync::AsyncSystem& asyncSystem,
     const glm::dmat4x4& transform,
     CreateModelOptions&& options,
-    const CesiumGeospatial::Ellipsoid& ellipsoid) {
+    const CesiumGeospatial::Ellipsoid& ellipsoid,
+#pragma region Das
+    GltfCreateProcessBase* pProcess) {
+#pragma endregion
   TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::loadModelAnyThreadPart)
 
   return CesiumGltfTextures::createInWorkerThread(asyncSystem, *options.pModel)
       .thenInWorkerThread(
-          [transform, ellipsoid, options = std::move(options)]() mutable
+          [transform, ellipsoid, options = std::move(options)
+#pragma region Das
+          , pProcess
+#pragma endregion
+          ]() mutable
           -> UCesiumGltfComponent::CreateOffGameThreadResult {
             auto pHalf = MakeUnique<HalfConstructedReal>();
 
@@ -2330,6 +2444,29 @@ loadModelAnyThreadPart(
               applyGltfUpAxisTransform(model, rootTransform);
             }
 
+#pragma region Das
+            int nNodeSize = model.nodes.size();
+            //dd 标记大量纹理个数
+            if (/*nNodeSize > 100 || *//*model.images.size() > 100*/false)
+            {
+              pHalf->loadModelResult.IsBigNumTex = true;
+              int a = 0;
+              a++;
+
+              //打印nNodeSize， images size
+							/*UE_LOG(
+								LogCesium,
+								Log,
+								TEXT("Num nodes: %d, Num text: %d"), nNodeSize, model.images.size()
+								);*/
+              //model.ignoreLoad = true;
+							UCesiumGltfComponent::CreateOffGameThreadResult result;
+							result.HalfConstructed = std::move(pHalf);
+							result.TileLoadResult = std::move(options.tileLoadResult);
+              return result;
+						}
+#pragma endregion
+
             if (model.scene >= 0 && model.scene < model.scenes.size()) {
               // Show the default scene
               const CesiumGltf::Scene& defaultScene = model.scenes[model.scene];
@@ -2342,7 +2479,10 @@ loadModelAnyThreadPart(
                     pHalf->loadModelResult.nodeResults,
                     rootTransform,
                     nodeOptions,
-                    ellipsoid);
+                    ellipsoid,
+#pragma region Das
+                    pProcess);
+#pragma endregion
               }
             } else if (model.scenes.size() > 0) {
               // There's no default, so show the first scene
@@ -2356,7 +2496,10 @@ loadModelAnyThreadPart(
                     pHalf->loadModelResult.nodeResults,
                     rootTransform,
                     nodeOptions,
-                    ellipsoid);
+                    ellipsoid,
+#pragma region Das
+                    pProcess);
+#pragma endregion
               }
             } else if (model.nodes.size() > 0) {
               // No scenes at all, use the first node as the root node.
@@ -2368,7 +2511,10 @@ loadModelAnyThreadPart(
                   pHalf->loadModelResult.nodeResults,
                   rootTransform,
                   nodeOptions,
-                  ellipsoid);
+                  ellipsoid,
+#pragma region Das
+                  pProcess);
+#pragma endregion
             } else if (model.meshes.size() > 0) {
               // No nodes either, show all the meshes.
               for (size_t i = 0; i < model.meshes.size(); i++) {
@@ -2386,11 +2532,26 @@ loadModelAnyThreadPart(
                     dummyNodeResult.meshResult,
                     rootTransform,
                     meshOptions,
-                    ellipsoid);
+                    ellipsoid,
+#pragma region Das
+                    pProcess);
+#pragma endregion
               }
             }
 
+#pragma region Das
+            //加载内容扩展
+            if (pProcess)
+            {
+              pProcess->LoadModelOffGameThread(
+                  pHalf->loadModelResult,
+                  rootTransform,
+                  options);
+            }
+#pragma endregion
+
             UCesiumGltfComponent::CreateOffGameThreadResult result;
+            pHalf->pGltfCreatePtr = TSharedPtr<GltfCreateProcessBase>(pProcess);
             result.HalfConstructed = std::move(pHalf);
             result.TileLoadResult = std::move(options.tileLoadResult);
 
@@ -2970,14 +3131,29 @@ static void loadPrimitiveGameThreadPart(
     bool createNavCollision,
     ACesium3DTileset* pTilesetActor,
     const std::vector<FTransform>& instanceTransforms,
-    const TSharedPtr<FCesiumPrimitiveFeatures>& pInstanceFeatures) {
+    const TSharedPtr<FCesiumPrimitiveFeatures>& pInstanceFeatures,
+#pragma region Das
+    GltfCreateProcessBase* pProcess) {
+#pragma endregion
   TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::LoadPrimitive)
 
 #if DEBUG_GLTF_ASSET_NAMES
   FName componentName = createSafeName(loadResult.name, "");
+#pragma region Das
+	std::string strName = TCHAR_TO_UTF8(*componentName.ToString());
+	strName = CesiumUtility::Uri::uriPathToNativePath(strName);
+	componentName = FName(FString(UTF8_TO_TCHAR(strName.c_str())));
+#pragma endregion
 #else
   FName componentName = "";
 #endif
+
+  FString strTestName = componentName.ToString();
+  if (strTestName.Contains("Tile_-6242_-2522_L26_0uuu6003"))
+  {
+    int a = 0;
+    a++;
+  }
 
   const Cesium3DTilesSelection::BoundingVolume& boundingVolume =
       tile.getContentBoundingVolume().value_or(tile.getBoundingVolume());
@@ -2985,8 +3161,28 @@ static void loadPrimitiveGameThreadPart(
   CesiumGltf::MeshPrimitive& meshPrimitive =
       model.meshes[loadResult.meshIndex].primitives[loadResult.primitiveIndex];
 
+#pragma region Das
+  //自定义渲染组件创建
+  USceneComponent* pComponentCustom = nullptr;
+  if (pProcess)
+  {
+    TRACE_CPUPROFILER_EVENT_SCOPE(Das::LoadPrimitiveCreateRender)
+    pComponentCustom = pProcess->CreateRenderOnGameThread(model, pGltf, loadResult, cesiumToUnrealTransform, tile, pTilesetActor, componentName);
+  }
+#pragma endregion
+
   UStaticMeshComponent* pMesh = nullptr;
   ICesiumPrimitive* pCesiumPrimitive = nullptr;
+
+#pragma region Das
+  //如果自定义组件创建成功，使用自定义组件
+  if (pComponentCustom)
+  {
+    pCesiumPrimitive = Cast<ICesiumPrimitive>(pComponentCustom);
+    pMesh = Cast<UStaticMeshComponent>(pComponentCustom);
+  }
+  else
+#pragma endregion
   if (meshPrimitive.mode == CesiumGltf::MeshPrimitive::Mode::POINTS) {
     UCesiumGltfPointsComponent* pPointMesh =
         NewObject<UCesiumGltfPointsComponent>(pGltf, componentName);
@@ -3033,6 +3229,10 @@ static void loadPrimitiveGameThreadPart(
     primData.PositionAccessor = std::move(loadResult.PositionAccessor);
     primData.IndexAccessor = std::move(loadResult.IndexAccessor);
     primData.HighPrecisionNodeTransform = loadResult.transform;
+#pragma region Das
+		//提前了,debug bounding volume
+		primData.boundingVolume = boundingVolume;
+#pragma endregion
     pCesiumPrimitive->UpdateTransformFromCesium(cesiumToUnrealTransform);
     pMesh->bUseDefaultCollision = false;
     pMesh->SetCollisionObjectType(ECollisionChannel::ECC_WorldStatic);
@@ -3040,13 +3240,13 @@ static void loadPrimitiveGameThreadPart(
         RF_Transient | RF_DuplicateTransient | RF_TextExportTransient);
     primData.pModel = &model;
     primData.pMeshPrimitive = &meshPrimitive;
-    primData.boundingVolume = boundingVolume;
     pMesh->SetRenderCustomDepth(pGltf->CustomDepthParameters.RenderCustomDepth);
     pMesh->SetCustomDepthStencilWriteMask(
         pGltf->CustomDepthParameters.CustomDepthStencilWriteMask);
     pMesh->SetCustomDepthStencilValue(
         pGltf->CustomDepthParameters.CustomDepthStencilValue);
     if (loadResult.isUnlit) {
+      //region Das是否投射阴影
       pMesh->bCastDynamicShadow = false;
     }
     pMesh->RuntimeVirtualTextures =
@@ -3104,7 +3304,18 @@ static void loadPrimitiveGameThreadPart(
   }
 #endif
 
+#pragma region Das
+  if (pProcess) {
+    pBaseMaterial = pProcess->SetBaseMaterial(
+        pBaseMaterial,
+        loadResult.primitiveMode);
+  }
+#pragma endregion
+
   UMaterialInstanceDynamic* pMaterial;
+#pragma region Das
+  UCesiumMaterialUserData* pCesiumData = nullptr; // 提到外面供SetMaterialParameter使用
+#pragma endregion
   {
     TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::SetupMaterial)
 
@@ -3249,6 +3460,13 @@ static void loadPrimitiveGameThreadPart(
 
   pMaterial->TwoSided = true;
 
+#pragma region Das
+  if (pProcess) {
+    TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::LoadPrimitiveSetMaterialParameter)
+    pProcess->SetMaterialParameter(pMaterial, pCesiumData, loadResult, cesiumToUnrealTransform);
+  }
+#pragma endregion
+
   pStaticMesh->AddMaterial(pMaterial);
 
   pStaticMesh->SetLightingGuid();
@@ -3298,6 +3516,20 @@ static void loadPrimitiveGameThreadPart(
 
   pMesh->SetupAttachment(pGltf);
 
+#pragma region Das
+  //附加到渲染组件
+  if (pProcess)
+  {
+    TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::LoadPrimitiveProcess)
+    pProcess->AttachToRenderOnGameThread(
+        loadResult,
+        pMesh,
+        tile,
+        pStaticMesh,
+        cesiumToUnrealTransform);
+  }
+#pragma endregion
+
   {
     TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::RegisterComponent)
     pMesh->RegisterComponent();
@@ -3309,12 +3541,38 @@ UCesiumGltfComponent::CreateOffGameThread(
     const CesiumAsync::AsyncSystem& AsyncSystem,
     const glm::dmat4x4& Transform,
     CreateModelOptions&& Options,
-    const CesiumGeospatial::Ellipsoid& Ellipsoid) {
+    const CesiumGeospatial::Ellipsoid& Ellipsoid,
+    GltfCreateProcessBase* pProcess) {
+
+#pragma region Das
+  std::string name = "glTF";
+  const auto urlIt = Options.pModel->extras.find("Cesium3DTiles_TileUrl");
+  if (urlIt != Options.pModel->extras.end()) {
+    name = urlIt->second.getStringOrDefault("glTF");
+    name = constrainLength(name, 256);
+    std::string nameCh = CesiumUtility::Uri::uriPathToNativePath(name);
+    //UE_LOG(
+    //    LogCesium,
+    //    Log,
+    //    TEXT("CreateOffGameThread: %s, time span"),
+    //    *FString(UTF8_TO_TCHAR(nameCh.c_str())));
+  }
+  else
+  {
+    int a = 0;
+    a++;
+  }
+#pragma endregion
+
+
   return loadModelAnyThreadPart(
       AsyncSystem,
       Transform,
       std::move(Options),
-      Ellipsoid);
+      Ellipsoid,
+#pragma region Das
+      pProcess);
+#pragma endregion
 }
 
 /*static*/ UCesiumGltfComponent* UCesiumGltfComponent::CreateOnGameThread(
@@ -3330,8 +3588,59 @@ UCesiumGltfComponent::CreateOffGameThread(
     bool createNavCollision) {
   TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::LoadModel)
 
+	  
+#pragma region Das
+#ifdef SHOW_3DTILES_LOAD_TIME
+	std::string name = "glTF";
+	FDateTime timeBein = FDateTime::Now();
+
+  FString strFileName;
+  const auto urlIt = model.extras.find("Cesium3DTiles_TileUrl");
+  if (urlIt != model.extras.end()) {
+	  name = urlIt->second.getStringOrDefault("glTF");
+	  name = constrainLength(name, 256);
+    std::string nameCh = CesiumUtility::Uri::uriPathToNativePath(name);
+          FString strTileID = UTF8_TO_TCHAR(nameCh.c_str());
+          strFileName = FPaths::GetCleanFilename(strTileID);
+          float fTimeSpan = 0;
+          {
+            std::lock_guard<std::mutex> lock(pTilesetActor->mmutex);
+
+            if (pTilesetActor->mmapTile2LoadFinish.Contains(strFileName)) {
+              fTimeSpan =
+                  (timeBein -
+                           pTilesetActor->mmapTile2LoadFinish[strFileName])
+                              .GetTotalMilliseconds();
+
+              pTilesetActor->mmapTile2LoadFinish.Remove(strFileName);
+            } else {
+              int a = 0;
+              a++;
+            }
+          }
+    UE_LOG(
+        LogCesium,
+        Log,
+        TEXT("CreateOnGameThread: %s, time span %f"),
+              *strFileName,
+              fTimeSpan);
+  }
+
+  FDateTime beginTime = FDateTime::Now();
+  bool bFindBig = false;
+  if (name.find("file:///E:/WDS_3DTiles/3/top/Level_14/Tile_p0000_p0000_L14_004.b3dm") < name.length())
+  {
+	  bFindBig = true;
+  }
+#endif
+#pragma endregion
+
   HalfConstructedReal* pReal =
       static_cast<HalfConstructedReal*>(pHalfConstructed.Get());
+
+#pragma region Das
+  GltfCreateProcessBase* pProcess = pReal->pGltfCreatePtr.Get();
+#pragma endregion
 
   // TODO: was this a common case before?
   // (This code checked if there were no loaded primitives in the model)
@@ -3339,7 +3648,17 @@ UCesiumGltfComponent::CreateOffGameThread(
   //   return nullptr;
   // }
 
-  UCesiumGltfComponent* Gltf = NewObject<UCesiumGltfComponent>(pTilesetActor);
+#pragma region Das
+  UCesiumGltfComponent* Gltf = nullptr;
+  if (pProcess)
+  {
+    Gltf = pProcess->CreateGltfOnGameThread();
+  }
+  if(!Gltf)
+#pragma endregion
+  {
+    Gltf = NewObject<UCesiumGltfComponent>(pTilesetActor);
+  }
   Gltf->SetMobility(pTilesetActor->GetRootComponent()->Mobility);
   Gltf->SetFlags(RF_Transient | RF_DuplicateTransient | RF_TextExportTransient);
 
@@ -3368,7 +3687,17 @@ UCesiumGltfComponent::CreateOffGameThread(
     encodeMetadataGameThreadPart(*Gltf->EncodedMetadata_DEPRECATED);
   }
 
+#pragma region Das
+	bool bOutline = pReal->loadModelResult.IsBigNumTex;
+#pragma endregion
   for (LoadedNodeResult& node : pReal->loadModelResult.nodeResults) {
+#pragma region Das
+		if (pTilesetActor->ForbitBigNumTex && bOutline)
+		{
+			break;
+		}
+#pragma endregion
+
     if (node.meshResult) {
       for (LoadedPrimitiveResult& primitive :
            node.meshResult->primitiveResults) {
@@ -3381,13 +3710,47 @@ UCesiumGltfComponent::CreateOffGameThread(
             createNavCollision,
             pTilesetActor,
             node.InstanceTransforms,
-            node.pInstanceFeatures);
+            node.pInstanceFeatures,
+#pragma region Das
+            pProcess);
+#pragma endregion
+
+#pragma region Das
+				if (bOutline)
+				{
+          for (USceneComponent* pSceneComponent : Gltf->GetAttachChildren()) {
+            UCesiumGltfPrimitiveComponent* pPrimitive =
+                Cast<UCesiumGltfPrimitiveComponent>(pSceneComponent);
+            if (pPrimitive) {
+              pPrimitive->SetRenderCustomDepth(true);
+#ifdef DAS_WITH_DEPTH_BUFER
+              pPrimitive->SetDasCustomValue(1);
+#endif
+            }
+          }
+				}
+#pragma endregion
       }
     }
   }
 
   Gltf->SetVisibility(false, true);
   Gltf->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+#pragma region Das
+#ifdef SHOW_3DTILES_LOAD_TIME
+  if (bFindBig)
+  {
+	  int nLoadTime = (FDateTime::Now() - beginTime).GetTotalMilliseconds();
+	  int a = 0;
+	  a++;
+  }
+
+	float fTimeSpan = (FDateTime::Now() - timeBein)
+		.GetTotalMilliseconds();
+#endif
+#pragma endregion
+  
   return Gltf;
 }
 
@@ -3573,6 +3936,20 @@ void UCesiumGltfComponent::DetachRasterTile(
 
 void UCesiumGltfComponent::SetCollisionEnabled(
     ECollisionEnabled::Type NewType) {
+
+#pragma region Das
+  if (mbLimitCollisionUpdate)
+  {
+		//部分场景瓦块隐藏不关闭碰撞。修改过程影响性能，相机容易跑飞
+		if (mnLastType == ECollisionEnabled::QueryAndPhysics)
+		{
+			return;
+		}
+  }
+  
+	mnLastType = NewType;
+#pragma endregion
+
   for (USceneComponent* pSceneComponent : this->GetAttachChildren()) {
     UCesiumGltfPrimitiveComponent* pPrimitive =
         Cast<UCesiumGltfPrimitiveComponent>(pSceneComponent);
@@ -3642,6 +4019,13 @@ void UCesiumGltfComponent::UpdateFade(float fadePercentage, bool fadingIn) {
         fadingIn ? 0.0f : 1.0f);
   }
 }
+
+#pragma region Das
+void UCesiumGltfComponent::SetLimitCollisionUpdate(bool bLimit)
+{
+  mbLimitCollisionUpdate = bLimit;
+}
+#pragma endregion
 
 template <typename TIndex>
 #if ENGINE_VERSION_5_4_OR_HIGHER

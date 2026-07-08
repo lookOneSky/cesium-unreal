@@ -86,7 +86,9 @@ FindGeoreferenceWithTag(const UObject* WorldContextObject, const FName& Tag) {
        actorIterator;
        ++actorIterator) {
     AActor* actor = *actorIterator;
-    if (actor->GetLevel() == World->PersistentLevel &&
+#pragma region jiangs
+		if (/*actor->GetLevel() == World->PersistentLevel &&*/
+#pragma endregion
         actor->ActorHasTag(Tag)) {
       Georeference = Cast<ACesiumGeoreference>(actor);
       break;
@@ -138,6 +140,108 @@ CreateDefaultGeoreference(const UObject* WorldContextObject, const FName& Tag) {
 } // namespace
 
 /*static*/ const double ACesiumGeoreference::kMinimumScale = 1.0e-6;
+
+#pragma region Das
+#ifdef SUPPORT_OLD_VERSION
+glm::dvec3 ACesiumGeoreference::TransformEcefToUnreal(const glm::dvec3& ecef) const
+{
+	return this->GetGeoTransforms().TransformEcefToUnreal(
+		glm::dvec3(CesiumActors::getWorldOrigin4D(this)),
+		ecef);
+}
+
+glm::dvec3 ACesiumGeoreference::TransformEcefToLongitudeLatitudeHeight(const glm::dvec3& Ecef) const
+{
+	return this->GetGeoTransforms().TransformEcefToLongitudeLatitudeHeight(Ecef);
+}
+
+glm::dvec3 ACesiumGeoreference::TransformLongitudeLatitudeHeightToEcef(const glm::dvec3& LongitudeLatitudeHeight) const
+{
+	return this->GetGeoTransforms().TransformLongitudeLatitudeHeightToEcef(
+		LongitudeLatitudeHeight);
+}
+
+glm::dvec3 ACesiumGeoreference::TransformLongitudeLatitudeHeightToUnreal(const glm::dvec3& longitudeLatitudeHeight) const
+{
+	return this->GetGeoTransforms().TransformLongitudeLatitudeHeightToUnreal(
+		glm::dvec3(CesiumActors::getWorldOrigin4D(this)),
+		longitudeLatitudeHeight);
+}
+
+glm::dvec3
+ACesiumGeoreference::TransformUnrealToEcef(const glm::dvec3& ue) const {
+	return this->GetGeoTransforms().TransformUnrealToEcef(
+		glm::dvec3(CesiumActors::getWorldOrigin4D(this)),
+		ue);
+}
+
+FVector ACesiumGeoreference::TransformUnrealToEcef(const FVector& Ecef) const
+{
+	return TransformUnrealPositionToEarthCenteredEarthFixed(Ecef);
+}
+
+glm::dvec3 ACesiumGeoreference::TransformUnrealToLongitudeLatitudeHeight(
+	const glm::dvec3& ue) const {
+	return this->GetGeoTransforms().TransformUnrealToLongitudeLatitudeHeight(
+		glm::dvec3(CesiumActors::getWorldOrigin4D(this)),
+		ue);
+}
+
+
+bool ACesiumGeoreference::GetAutoChangeTheGeoReference()
+{
+	return false;
+	//return AutoChangeOrigin;
+}
+
+FRotator ACesiumGeoreference::TransformRotatorEastSouthUpToUnreal(
+	const FRotator& EastSouthUpRotator,
+	const FVector& UnrealLocation) const
+{
+	return TransformEastSouthUpRotatorToUnreal(EastSouthUpRotator, UnrealLocation);
+}
+
+FRotator ACesiumGeoreference::TransformRotatorUnrealToEastSouthUp(
+	const FRotator& UnrealRotator,
+	const FVector& UnrealLocation) const
+{
+	return TransformUnrealRotatorToEastSouthUp(UnrealRotator, UnrealLocation);
+}
+
+FVector ACesiumGeoreference::TransformUnrealToLongitudeLatitudeHeight(
+	const FVector& UnrealPosition) const
+{
+	return TransformUnrealPositionToLongitudeLatitudeHeight(UnrealPosition);
+}
+
+FVector ACesiumGeoreference::TransformLongitudeLatitudeHeightToUnreal(
+	const FVector& LongitudeLatitudeHeight) const {
+	return this->TransformEarthCenteredEarthFixedPositionToUnreal(
+		UCesiumWgs84Ellipsoid::LongitudeLatitudeHeightToEarthCenteredEarthFixed(
+			LongitudeLatitudeHeight));
+}
+
+FVector ACesiumGeoreference::TransformEcefToUnreal(const FVector& Ecef) const
+{
+	return TransformEarthCenteredEarthFixedPositionToUnreal(Ecef);
+}
+
+FMatrix ACesiumGeoreference::ComputeEastSouthUpToUnreal(const FVector& Unreal) const
+{
+	return ComputeEastSouthUpToUnrealTransformation(Unreal);
+}
+
+void ACesiumGeoreference::SetGeoreferenceOriginLongitudeLatitudeHeight(const FVector& TargetLongitudeLatitudeHeight)
+{
+	return SetOriginLongitudeLatitudeHeight(TargetLongitudeLatitudeHeight);
+}
+
+void ACesiumGeoreference::SetAutoChangeTheGeoReference(bool enable)
+{
+
+}
+#endif
+#pragma endregion
 
 /*static*/ ACesiumGeoreference*
 ACesiumGeoreference::GetDefaultGeoreference(const UObject* WorldContextObject) {
