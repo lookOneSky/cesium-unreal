@@ -258,43 +258,70 @@ void updatePerSplatData(
     }
   }
 
-  float* pPositionsBuffer = static_cast<float*>(RHICmdList.LockBuffer(
-      Proxy.PositionsBuffer.Buffer,
-      0,
-      requiredPositionBytes,
-      EResourceLockMode::RLM_WriteOnly));
-  float* pScalesBuffer = static_cast<float*>(RHICmdList.LockBuffer(
-      Proxy.ScalesBuffer.Buffer,
-      0,
-      requiredPositionBytes,
-      EResourceLockMode::RLM_WriteOnly));
-  float* pOrientationsBuffer = static_cast<float*>(RHICmdList.LockBuffer(
-      Proxy.OrientationsBuffer.Buffer,
-      0,
-      requiredPositionBytes,
-      EResourceLockMode::RLM_WriteOnly));
-  float* pColorsBuffer = static_cast<float*>(RHICmdList.LockBuffer(
-      Proxy.ColorsBuffer.Buffer,
-      0,
-      requiredPositionBytes,
-      EResourceLockMode::RLM_WriteOnly));
-  float* pSHNonZeroCoeffsBuffer =
-      ShCoefficientCount > 0 ? static_cast<float*>(RHICmdList.LockBuffer(
-                                   Proxy.SHNonZeroCoeffsBuffer.Buffer,
-                                   0,
-                                   ShCoefficientCount * 4 * sizeof(float),
-                                   EResourceLockMode::RLM_WriteOnly))
-                             : nullptr;
-  uint32* pIndexBuffer = static_cast<uint32*>(RHICmdList.LockBuffer(
-      Proxy.TileIndicesBuffer.Buffer,
-      0,
-      SplatCount * sizeof(uint32),
-      EResourceLockMode::RLM_WriteOnly));
-  uint32* pSHDegreesBuffer = static_cast<uint32*>(RHICmdList.LockBuffer(
-      Proxy.SplatSHDegreesBuffer.Buffer,
-      0,
-      Components.Num() * sizeof(uint32) * 3,
-      EResourceLockMode::RLM_WriteOnly));
+  float* pPositionsBuffer = nullptr; // add Jiangs
+  if (Proxy.PositionsBuffer.Buffer)
+  {
+    pPositionsBuffer = static_cast<float*>(RHICmdList.LockBuffer( // add Jiangs
+        Proxy.PositionsBuffer.Buffer,
+        0,
+        requiredPositionBytes,
+        EResourceLockMode::RLM_WriteOnly));
+  }
+
+  float* pScalesBuffer = nullptr; // add Jiangs
+  if (Proxy.ScalesBuffer.Buffer)
+  {
+    pScalesBuffer = static_cast<float*>(RHICmdList.LockBuffer(
+        Proxy.ScalesBuffer.Buffer,
+        0,
+        requiredPositionBytes,
+        EResourceLockMode::RLM_WriteOnly));
+  }
+  float* pOrientationsBuffer = nullptr; // add Jiangs
+  if (Proxy.OrientationsBuffer.Buffer)
+  {
+    pOrientationsBuffer = static_cast<float*>(RHICmdList.LockBuffer(
+        Proxy.OrientationsBuffer.Buffer,
+        0,
+        requiredPositionBytes,
+        EResourceLockMode::RLM_WriteOnly));
+  }
+  float* pColorsBuffer = nullptr; // add Jiangs
+  if (Proxy.ColorsBuffer.Buffer)
+  {
+    pColorsBuffer = static_cast<float*>(RHICmdList.LockBuffer(
+        Proxy.ColorsBuffer.Buffer,
+        0,
+        requiredPositionBytes,
+        EResourceLockMode::RLM_WriteOnly));
+  }
+  float* pSHNonZeroCoeffsBuffer = nullptr; // add Jiangs
+  if (ShCoefficientCount > 0 && Proxy.SHNonZeroCoeffsBuffer.Buffer)
+  {
+    pSHNonZeroCoeffsBuffer = static_cast<float*>(RHICmdList.LockBuffer(
+        Proxy.SHNonZeroCoeffsBuffer.Buffer,
+        0,
+        ShCoefficientCount * 4 * sizeof(float),
+        EResourceLockMode::RLM_WriteOnly));
+  }
+  uint32* pIndexBuffer = nullptr; // add Jiangs
+  if (Proxy.TileIndicesBuffer.Buffer)
+  {
+    pIndexBuffer = static_cast<uint32*>(RHICmdList.LockBuffer(
+        Proxy.TileIndicesBuffer.Buffer,
+        0,
+        SplatCount * sizeof(uint32),
+        EResourceLockMode::RLM_WriteOnly));
+  }
+  uint32* pSHDegreesBuffer = nullptr; // add Jiangs
+  if (Proxy.SplatSHDegreesBuffer.Buffer)
+  {
+    pSHDegreesBuffer = static_cast<uint32*>(RHICmdList.LockBuffer(
+        Proxy.SplatSHDegreesBuffer.Buffer,
+        0,
+        Components.Num() * sizeof(uint32) * 3,
+        EResourceLockMode::RLM_WriteOnly));
+  }
 
   int32 coeffCountWritten = 0;
   int32 splatCountWritten = 0;
@@ -302,52 +329,76 @@ void updatePerSplatData(
     const UCesiumGltfGaussianSplatComponent* pComponent = Components[i];
     check(pComponent);
 
-    FPlatformMemory::Memcpy(
-        reinterpret_cast<void*>(pPositionsBuffer + splatCountWritten * 4),
-        pComponent->Data.Positions.GetData(),
-        pComponent->Data.Positions.Num() * sizeof(float));
-    FPlatformMemory::Memcpy(
-        reinterpret_cast<void*>(pScalesBuffer + splatCountWritten * 4),
-        pComponent->Data.Scales.GetData(),
-        pComponent->Data.Scales.Num() * sizeof(float));
-    FPlatformMemory::Memcpy(
-        reinterpret_cast<void*>(pOrientationsBuffer + splatCountWritten * 4),
-        pComponent->Data.Orientations.GetData(),
-        pComponent->Data.Orientations.Num() * sizeof(float));
-    FPlatformMemory::Memcpy(
-        reinterpret_cast<void*>(pColorsBuffer + splatCountWritten * 4),
-        pComponent->Data.Colors.GetData(),
-        pComponent->Data.Colors.Num() * sizeof(float));
-    if (ShCoefficientCount > 0) {
+    if (pPositionsBuffer)
+    {
+      FPlatformMemory::Memcpy(
+          reinterpret_cast<void*>(pPositionsBuffer + splatCountWritten * 4),
+          pComponent->Data.Positions.GetData(),
+          pComponent->Data.Positions.Num() * sizeof(float));
+    }
+
+    if (pScalesBuffer) // add Jiangs
+    {
+      FPlatformMemory::Memcpy(
+          reinterpret_cast<void*>(pScalesBuffer + splatCountWritten * 4),
+          pComponent->Data.Scales.GetData(),
+          pComponent->Data.Scales.Num() * sizeof(float));
+    }
+    if (pOrientationsBuffer) // add Jiangs
+    {
+      FPlatformMemory::Memcpy(
+          reinterpret_cast<void*>(pOrientationsBuffer + splatCountWritten * 4),
+          pComponent->Data.Orientations.GetData(),
+          pComponent->Data.Orientations.Num() * sizeof(float));
+    }
+    if (pColorsBuffer) // add Jiangs
+    {
+      FPlatformMemory::Memcpy(
+          reinterpret_cast<void*>(pColorsBuffer + splatCountWritten * 4),
+          pComponent->Data.Colors.GetData(),
+          pComponent->Data.Colors.Num() * sizeof(float));
+    }
+    if (pSHNonZeroCoeffsBuffer) // add Jiangs
+    {
       FPlatformMemory::Memcpy(
           reinterpret_cast<void*>(
               pSHNonZeroCoeffsBuffer + coeffCountWritten * 4),
           pComponent->Data.SphericalHarmonics.GetData(),
           pComponent->Data.SphericalHarmonics.Num() * sizeof(float));
     }
-    for (int32 j = 0; j < pComponent->Data.NumSplats; j++) {
-      pIndexBuffer[splatCountWritten + j] = static_cast<uint32>(i);
+    if (pIndexBuffer) // add Jiangs
+    {
+      for (int32 j = 0; j < pComponent->Data.NumSplats; j++) {
+        pIndexBuffer[splatCountWritten + j] = static_cast<uint32>(i);
+      }
     }
-
-    pSHDegreesBuffer[i * 3] =
-        static_cast<uint32>(pComponent->Data.NumCoefficients);
-    pSHDegreesBuffer[i * 3 + 1] = static_cast<uint32>(coeffCountWritten);
-    pSHDegreesBuffer[i * 3 + 2] = static_cast<uint32>(splatCountWritten);
+    if (pSHDegreesBuffer) // add Jiangs
+    {
+      pSHDegreesBuffer[i * 3] =
+          static_cast<uint32>(pComponent->Data.NumCoefficients);
+      pSHDegreesBuffer[i * 3 + 1] = static_cast<uint32>(coeffCountWritten);
+      pSHDegreesBuffer[i * 3 + 2] = static_cast<uint32>(splatCountWritten);
+    }
 
     splatCountWritten += pComponent->Data.NumSplats;
     coeffCountWritten +=
         pComponent->Data.NumSplats * pComponent->Data.NumCoefficients;
   }
 
-  RHICmdList.UnlockBuffer(Proxy.PositionsBuffer.Buffer);
-  RHICmdList.UnlockBuffer(Proxy.ScalesBuffer.Buffer);
-  RHICmdList.UnlockBuffer(Proxy.OrientationsBuffer.Buffer);
-  RHICmdList.UnlockBuffer(Proxy.ColorsBuffer.Buffer);
-  if (ShCoefficientCount > 0) {
+  if (Proxy.PositionsBuffer.Buffer) // add Jiangs
+    RHICmdList.UnlockBuffer(Proxy.PositionsBuffer.Buffer);
+  if (Proxy.ScalesBuffer.Buffer) // add Jiangs
+    RHICmdList.UnlockBuffer(Proxy.ScalesBuffer.Buffer);
+  if (Proxy.OrientationsBuffer.Buffer) // add Jiangs
+    RHICmdList.UnlockBuffer(Proxy.OrientationsBuffer.Buffer);
+  if (Proxy.ColorsBuffer.Buffer) // add Jiangs
+    RHICmdList.UnlockBuffer(Proxy.ColorsBuffer.Buffer);
+  if (ShCoefficientCount > 0 && Proxy.SHNonZeroCoeffsBuffer.Buffer) // add Jiangs
     RHICmdList.UnlockBuffer(Proxy.SHNonZeroCoeffsBuffer.Buffer);
-  }
-  RHICmdList.UnlockBuffer(Proxy.TileIndicesBuffer.Buffer);
-  RHICmdList.UnlockBuffer(Proxy.SplatSHDegreesBuffer.Buffer);
+  if (Proxy.TileIndicesBuffer.Buffer) // add Jiangs
+    RHICmdList.UnlockBuffer(Proxy.TileIndicesBuffer.Buffer);
+  if (Proxy.SplatSHDegreesBuffer.Buffer) // add Jiangs
+    RHICmdList.UnlockBuffer(Proxy.SplatSHDegreesBuffer.Buffer);
 }
 } // namespace
 
