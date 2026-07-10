@@ -40,6 +40,11 @@ UnrealPrepareRendererResources::prepareInLoadThread(
 
   options.ignoreKhrMaterialsUnlit = this->_pActor->GetIgnoreKhrMaterialsUnlit();
 
+#pragma region jiangs
+  options.ignoreTilesetGltfUpAxis =
+      this->_pActor->GetIgnoreTilesetGltfUpAxis(); // add Jiangs
+#pragma endregion
+
   options.pFeaturesMetadata = this->_pActor->_pFeaturesMetadataComponent;
 
   PRAGMA_DISABLE_DEPRECATION_WARNINGS

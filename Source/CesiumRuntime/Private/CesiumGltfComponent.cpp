@@ -42,6 +42,13 @@
 #include "VecMath.h"
 #include "mikktspace.h"
 
+#pragma region jiangs
+#include "CesiumEllipsoid.h"
+#include "CesiumGeoreference.h"
+#include "Components/BoxComponent.h"
+#include <Cesium3DTilesSelection/BoundingVolume.h>
+#pragma endregion
+
 #include <CesiumGeometry/Axis.h>
 #include <CesiumGeometry/Rectangle.h>
 #include <CesiumGeometry/Transforms.h>
@@ -97,6 +104,36 @@ class HalfConstructedReal : public UCesiumGltfComponent::HalfConstructed {
 public:
   LoadedModelResult loadModelResult{};
 };
+
+#pragma region jiangs
+
+glm::dmat4 createBoxToTilesetTransform(
+    const CesiumGeometry::OrientedBoundingBox& boundingBox) {
+  const glm::dmat3& halfAxes = boundingBox.getHalfAxes();
+  return glm::dmat4(
+      glm::dvec4(halfAxes[0], 0.0),
+      glm::dvec4(halfAxes[1], 0.0),
+      glm::dvec4(halfAxes[2], 0.0),
+      glm::dvec4(boundingBox.getCenter(), 1.0));
+}
+
+void setRelativeTransformWithoutWarnings(
+    USceneComponent* pComponent,
+    const FTransform& transform) {
+  if (pComponent->Mobility == EComponentMobility::Movable) {
+    pComponent->SetRelativeTransform(
+        transform,
+        false,
+        nullptr,
+        ETeleportType::TeleportPhysics);
+  } else {
+    pComponent->SetRelativeTransform_Direct(transform);
+    pComponent->UpdateComponentToWorld();
+    pComponent->MarkRenderTransformDirty();
+  }
+}
+
+#pragma endregion
 } // namespace
 
 template <class... T> struct IsAccessorView;
@@ -2421,7 +2458,16 @@ namespace {
  */
 void applyGltfUpAxisTransform(
     const CesiumGltf::Model& model,
-    glm::dmat4x4& rootTransform) {
+    glm::dmat4x4& rootTransform,
+#pragma region jiangs
+    bool ignoreTilesetGltfUpAxis) { // add Jiangs
+
+  // 忽略遗留的 gltfUpAxis 声明,按 glTF 规范默认 Y-up 处理 add Jiangs
+  if (ignoreTilesetGltfUpAxis) {
+    rootTransform *= CesiumGeometry::Transforms::Y_UP_TO_Z_UP;
+    return;
+  }
+#pragma endregion
 
   auto gltfUpAxisIt = model.extras.find("gltfUpAxis");
   if (gltfUpAxisIt == model.extras.end()) {
@@ -2594,7 +2640,12 @@ loadModelAnyThreadPart(
               rootTransform = CesiumGltfContent::GltfUtilities::applyRtcCenter(
                   model,
                   rootTransform);
-              applyGltfUpAxisTransform(model, rootTransform);
+#pragma region jiangs
+              applyGltfUpAxisTransform(
+                  model,
+                  rootTransform,
+                  options.ignoreTilesetGltfUpAxis); // add Jiangs
+#pragma endregion
             }
 
             if (model.scene >= 0 && model.scene < model.scenes.size()) {
@@ -3971,6 +4022,58 @@ UCesiumGltfComponent::GetGltfToUnrealLocalVertexPositionScaleFactor() const {
       CesiumPrimitiveData::positionScaleFactor);
 }
 
+#pragma region jiangs
+
+void UCesiumGltfComponent::UpdateTileBoundingBox(
+    const Cesium3DTilesSelection::Tile& tile,
+    const glm::dmat4& cesiumToUnrealTransform,
+    const CesiumGeospatial::Ellipsoid& ellipsoid,
+    bool bShow) {
+  if (!bShow) {
+    this->SetTileBoundingBoxVisible(false);
+    return;
+  }
+
+  if (!this->TileBoundingBoxComponent) {
+    this->TileBoundingBoxComponent =
+        NewObject<UBoxComponent>(this, TEXT("CesiumTileBoundingBox"));
+    this->TileBoundingBoxComponent->SetMobility(this->Mobility);
+    this->TileBoundingBoxComponent->SetFlags(
+        RF_Transient | RF_DuplicateTransient | RF_TextExportTransient);
+    this->TileBoundingBoxComponent->SetCollisionEnabled(
+        ECollisionEnabled::NoCollision);
+    this->TileBoundingBoxComponent->SetGenerateOverlapEvents(false);
+    this->TileBoundingBoxComponent->SetCanEverAffectNavigation(false);
+    this->TileBoundingBoxComponent->SetBoxExtent(FVector::OneVector, false);
+    this->TileBoundingBoxComponent->ShapeColor = FColor::Yellow;
+    this->TileBoundingBoxComponent->SetupAttachment(this);
+    this->TileBoundingBoxComponent->RegisterComponent();
+  }
+
+  const CesiumGeometry::OrientedBoundingBox boundingBox =
+      Cesium3DTilesSelection::getOrientedBoundingBoxFromBoundingVolume(
+          tile.getBoundingVolume(),
+          ellipsoid);
+
+  const FTransform transform = VecMath::createTransform(
+      cesiumToUnrealTransform * createBoxToTilesetTransform(boundingBox));
+
+  setRelativeTransformWithoutWarnings(this->TileBoundingBoxComponent, transform);
+  this->TileBoundingBoxComponent->SetHiddenInGame(false);
+  this->TileBoundingBoxComponent->SetVisibility(true, true);
+}
+
+void UCesiumGltfComponent::SetTileBoundingBoxVisible(bool bVisible) {
+  if (!this->TileBoundingBoxComponent) {
+    return;
+  }
+
+  this->TileBoundingBoxComponent->SetHiddenInGame(!bVisible);
+  this->TileBoundingBoxComponent->SetVisibility(bVisible, true);
+}
+
+#pragma endregion
+
 void UCesiumGltfComponent::UpdateTransformFromCesium(
     const glm::dmat4& cesiumToUnrealTransform) {
   for (USceneComponent* pSceneComponent : this->GetAttachChildren()) {
@@ -3978,6 +4081,24 @@ void UCesiumGltfComponent::UpdateTransformFromCesium(
       pCesiumPrimitive->UpdateTransformFromCesium(cesiumToUnrealTransform);
     }
   }
+
+#pragma region jiangs
+  if (this->pTile && this->TileBoundingBoxComponent &&
+      this->TileBoundingBoxComponent->IsVisible()) {
+    ACesiumGeoreference* pGeoreference =
+        this->GetTilesetActor().ResolveGeoreference();
+    if (pGeoreference) {
+      UCesiumEllipsoid* pEllipsoid = pGeoreference->GetEllipsoid();
+      if (pEllipsoid) {
+        this->UpdateTileBoundingBox(
+            *this->pTile,
+            cesiumToUnrealTransform,
+            pEllipsoid->GetNativeEllipsoid(),
+            true);
+      }
+    }
+  }
+#pragma endregion
 }
 
 namespace {

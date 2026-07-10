@@ -113,6 +113,9 @@ ACesium3DTileset::ACesium3DTileset()
       _beforeMovieUseLodTransitions(true),
 
       _scaleUsingDPI(false),
+#pragma region jiangs
+      _tileBoundingBoxesWereVisible(false),
+#pragma endregion
       _tilesToHideNextFrame(),
 
       _tilesetsBeingDestroyed(0),
@@ -558,6 +561,19 @@ void ACesium3DTileset::SetIgnoreKhrMaterialsUnlit(
     this->DestroyTileset();
   }
 }
+
+#pragma region jiangs
+
+// 设置是否忽略 tileset 的遗留 gltfUpAxis 声明,变化时重建 tileset add Jiangs
+void ACesium3DTileset::SetIgnoreTilesetGltfUpAxis(
+    bool bIgnoreTilesetGltfUpAxis) {
+  if (this->IgnoreTilesetGltfUpAxis != bIgnoreTilesetGltfUpAxis) {
+    this->IgnoreTilesetGltfUpAxis = bIgnoreTilesetGltfUpAxis;
+    this->DestroyTileset();
+  }
+}
+
+#pragma endregion
 
 void ACesium3DTileset::SetMaterial(UMaterialInterface* InMaterial) {
   if (this->Material != InMaterial) {
@@ -1801,6 +1817,32 @@ void forEachRenderableTile(const auto& tiles, Func&& f) {
   }
 }
 
+#pragma region jiangs
+
+void hideTileBoundingBoxesForLoadedTiles(
+    const Cesium3DTilesSelection::Tileset* pTileset) {
+  if (!pTileset) {
+    return;
+  }
+
+  pTileset->forEachLoadedTile([](const Cesium3DTilesSelection::Tile& tile) {
+    const Cesium3DTilesSelection::TileContent& content = tile.getContent();
+    const Cesium3DTilesSelection::TileRenderContent* pRenderContent =
+        content.getRenderContent();
+    if (!pRenderContent) {
+      return;
+    }
+
+    UCesiumGltfComponent* pGltf = static_cast<UCesiumGltfComponent*>(
+        pRenderContent->getRenderResources());
+    if (pGltf) {
+      pGltf->SetTileBoundingBoxVisible(false);
+    }
+  });
+}
+
+#pragma endregion
+
 void removeVisibleTilesFromList(
     std::vector<Cesium3DTilesSelection::Tile::ConstPointer>& list,
     const std::vector<Cesium3DTilesSelection::Tile::ConstPointer>&
@@ -1937,13 +1979,21 @@ void ACesium3DTileset::updateLastViewUpdateResultState(
     const TSoftObjectPtr<ACesiumGeoreference> Georeference =
         ResolveGeoreference();
     check(Georeference);
+#pragma region jiangs
+    const CesiumGeospatial::Ellipsoid& nativeEllipsoid =
+        Georeference->GetEllipsoid()->GetNativeEllipsoid();
+    const glm::dmat4& cesiumToUnrealTransform =
+        this->GetCesiumTilesetToUnrealRelativeWorldTransform();
+#pragma endregion
 
     for (const Cesium3DTilesSelection::Tile::ConstPointer& pTile :
          result.tilesToRenderThisFrame) {
+#pragma region jiangs
       CesiumGeometry::OrientedBoundingBox obb =
           Cesium3DTilesSelection::getOrientedBoundingBoxFromBoundingVolume(
               pTile->getBoundingVolume(),
-              Georeference->GetEllipsoid()->GetNativeEllipsoid());
+              nativeEllipsoid);
+#pragma endregion
 
       FVector unrealCenter =
           Georeference->TransformEarthCenteredEarthFixedPositionToUnreal(
@@ -1959,7 +2009,32 @@ void ACesium3DTileset::updateLastViewUpdateResultState(
 
       DrawDebugString(World, unrealCenter, text, nullptr, FColor::Red, 0, true);
     }
+
+#pragma region jiangs
+    forEachRenderableTile(
+        result.tilesToRenderThisFrame,
+        [&cesiumToUnrealTransform, &nativeEllipsoid](
+            const auto& pTile,
+            UCesiumGltfComponent* pGltf) {
+          pGltf->UpdateTileBoundingBox(
+              *pTile,
+              cesiumToUnrealTransform,
+              nativeEllipsoid,
+              true);
+        });
+
+    forEachRenderableTile(
+        result.tilesFadingOut,
+        [](const auto& /*pTile*/, UCesiumGltfComponent* pGltf) {
+          pGltf->SetTileBoundingBoxVisible(false);
+        });
+
+    this->_tileBoundingBoxesWereVisible = true;
+  } else if (this->_tileBoundingBoxesWereVisible) {
+    hideTileBoundingBoxesForLoadedTiles(this->_pTileset.Get());
+    this->_tileBoundingBoxesWereVisible = false;
   }
+#pragma endregion
 
 #ifdef CESIUM_DEBUG_TILE_STATES
   if (this->_pStateDebug && GetWorld()->IsPlayInEditor()) {
@@ -2043,10 +2118,13 @@ void ACesium3DTileset::showTilesToRender(
   TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::ShowTilesToRender)
   forEachRenderableTile(
       tiles,
-      [&RootComponent = this->RootComponent,
+#pragma region jiangs
+      [this,
+       &RootComponent = this->RootComponent,
        &BodyInstance = this->BodyInstance](
-          const Cesium3DTilesSelection::Tile::ConstPointer& pTile,
-          UCesiumGltfComponent* pGltf) {
+           const Cesium3DTilesSelection::Tile::ConstPointer& pTile,
+           UCesiumGltfComponent* pGltf) {
+#pragma endregion
         applyActorCollisionSettings(BodyInstance, pGltf);
 
         if (pGltf->GetAttachParent() == nullptr) {
@@ -2073,6 +2151,12 @@ void ACesium3DTileset::showTilesToRender(
           pGltf->SetVisibility(true, true);
         }
 
+#pragma region jiangs
+        if (!this->DrawTileInfo) {
+          pGltf->SetTileBoundingBoxVisible(false);
+        }
+
+#pragma endregion
         {
           TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::SetCollisionEnabled)
           pGltf->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
@@ -2318,6 +2402,10 @@ void ACesium3DTileset::PostEditChangeProperty(
       PropName == GET_MEMBER_NAME_CHECKED(ACesium3DTileset, EnableWaterMask) ||
       PropName ==
           GET_MEMBER_NAME_CHECKED(ACesium3DTileset, IgnoreKhrMaterialsUnlit) ||
+#pragma region jiangs
+      PropName ==
+          GET_MEMBER_NAME_CHECKED(ACesium3DTileset, IgnoreTilesetGltfUpAxis) || // add Jiangs
+#pragma endregion
       PropName == GET_MEMBER_NAME_CHECKED(ACesium3DTileset, Material) ||
       PropName ==
           GET_MEMBER_NAME_CHECKED(ACesium3DTileset, TranslucentMaterial) ||

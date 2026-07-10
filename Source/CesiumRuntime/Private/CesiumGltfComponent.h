@@ -22,6 +22,9 @@
 class UMaterialInterface;
 class UTexture2D;
 class UStaticMeshComponent;
+#pragma region jiangs
+class UBoxComponent;
+#pragma endregion
 
 namespace CreateGltfOptions {
 struct CreateModelOptions;
@@ -34,6 +37,12 @@ struct Model;
 namespace Cesium3DTilesSelection {
 class Tile;
 }
+
+#pragma region jiangs
+namespace CesiumGeospatial {
+class Ellipsoid;
+}
+#pragma endregion
 
 namespace CesiumRasterOverlays {
 class RasterOverlayTile;
@@ -120,6 +129,18 @@ public:
 
   void UpdateTransformFromCesium(const glm::dmat4& CesiumToUnrealTransform);
 
+#pragma region jiangs
+
+  void UpdateTileBoundingBox(
+      const Cesium3DTilesSelection::Tile& Tile,
+      const glm::dmat4& CesiumToUnrealTransform,
+      const CesiumGeospatial::Ellipsoid& Ellipsoid,
+      bool bShow);
+
+  void SetTileBoundingBoxVisible(bool bVisible);
+
+#pragma endregion
+
   void AttachRasterTile(
       const Cesium3DTilesSelection::Tile& Tile,
       const CesiumRasterOverlays::RasterOverlayTile& RasterTile,
@@ -151,4 +172,9 @@ public:
 private:
   UPROPERTY()
   UTexture2D* Transparent1x1 = nullptr;
+
+#pragma region jiangs
+  UPROPERTY()
+  UBoxComponent* TileBoundingBoxComponent = nullptr;
+#pragma endregion
 };

@@ -55,6 +55,10 @@ struct CreateModelOptions {
    */
   bool ignoreKhrMaterialsUnlit = false;
 
+#pragma region jiangs
+  bool ignoreTilesetGltfUpAxis = false; // 忽略遗留 gltfUpAxis,恒按 Y-up 处理 add Jiangs
+#pragma endregion
+
   /**
    * Options for loading voxel primitives in the tileset, if present.
    */
@@ -75,6 +79,9 @@ public:
         alwaysIncludeTangents(other.alwaysIncludeTangents),
         createPhysicsMeshes(other.createPhysicsMeshes),
         ignoreKhrMaterialsUnlit(other.ignoreKhrMaterialsUnlit),
+#pragma region jiangs
+        ignoreTilesetGltfUpAxis(other.ignoreTilesetGltfUpAxis), // add Jiangs
+#pragma endregion
         pVoxelOptions(other.pVoxelOptions),
         tileLoadResult(std::move(other.tileLoadResult)) {
     pModel = std::get_if<CesiumGltf::Model>(&this->tileLoadResult.contentKind);

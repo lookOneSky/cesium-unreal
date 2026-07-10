@@ -919,6 +919,29 @@ private:
       meta = (DisplayName = "Ignore KHR_materials_unlit"))
   bool IgnoreKhrMaterialsUnlit = false;
 
+#pragma region jiangs
+
+  /**
+   * Whether to ignore the legacy `asset.gltfUpAxis` declaration of the
+   * tileset and always treat glTF content as Y-up, as required by the glTF
+   * specification and 3D Tiles 1.1.
+   *
+   * `gltfUpAxis` is a pre-1.0 legacy property that most modern viewers
+   * ignore. Some tools write `gltfUpAxis: "Z"` while their glTF content is
+   * actually Y-up (already converted by a node matrix inside the glTF),
+   * which makes the content appear rotated 90 degrees around the X-axis.
+   * Enable this option to render such tilesets correctly.
+   */
+  UPROPERTY(
+      EditAnywhere,
+      BlueprintGetter = GetIgnoreTilesetGltfUpAxis,
+      BlueprintSetter = SetIgnoreTilesetGltfUpAxis,
+      Category = "Cesium|Rendering",
+      meta = (DisplayName = "Ignore Tileset gltfUpAxis"))
+  bool IgnoreTilesetGltfUpAxis = false; // 忽略遗留的 asset.gltfUpAxis 声明,恒按 Y-up 处理 add Jiangs
+
+#pragma endregion
+
   /**
    * Whether this tileset should receive decals.
    */
@@ -1177,6 +1200,16 @@ public:
   bool GetIgnoreKhrMaterialsUnlit() const { return IgnoreKhrMaterialsUnlit; }
   UFUNCTION(BlueprintSetter, Category = "Cesium|Rendering")
   void SetIgnoreKhrMaterialsUnlit(bool bIgnoreKhrMaterialsUnlit);
+
+#pragma region jiangs
+
+  // 获取/设置是否忽略 tileset 的遗留 gltfUpAxis 声明 add Jiangs
+  UFUNCTION(BlueprintGetter, Category = "Cesium|Rendering")
+  bool GetIgnoreTilesetGltfUpAxis() const { return IgnoreTilesetGltfUpAxis; }
+  UFUNCTION(BlueprintSetter, Category = "Cesium|Rendering")
+  void SetIgnoreTilesetGltfUpAxis(bool bIgnoreTilesetGltfUpAxis);
+
+#pragma endregion
 
   UFUNCTION(BlueprintGetter, Category = "Cesium|Rendering")
   bool GetReceiveDecals() const { return ReceiveDecals; }
@@ -1460,6 +1493,9 @@ private:
   bool _beforeMovieUseLodTransitions;
 
   bool _scaleUsingDPI;
+#pragma region jiangs
+  bool _tileBoundingBoxesWereVisible;
+#pragma endregion
 
   // This is used as a workaround for cesium-native#186
   //

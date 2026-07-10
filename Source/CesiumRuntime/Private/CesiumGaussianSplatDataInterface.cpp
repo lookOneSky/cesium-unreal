@@ -258,6 +258,7 @@ void updatePerSplatData(
     }
   }
 
+#pragma region jiangs
   float* pPositionsBuffer = nullptr; // add Jiangs
   if (Proxy.PositionsBuffer.Buffer)
   {
@@ -399,6 +400,7 @@ void updatePerSplatData(
     RHICmdList.UnlockBuffer(Proxy.TileIndicesBuffer.Buffer);
   if (Proxy.SplatSHDegreesBuffer.Buffer) // add Jiangs
     RHICmdList.UnlockBuffer(Proxy.SplatSHDegreesBuffer.Buffer);
+#pragma endregion
 }
 } // namespace
 
