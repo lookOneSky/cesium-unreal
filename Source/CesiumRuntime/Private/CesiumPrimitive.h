@@ -116,10 +116,7 @@ public:
    * exponent of coordinate values, not the mantissa, in order to reduce the
    * chances of losing precision.
    */
-#pragma region Das
-	//static constexpr double positionScaleFactor = 1024.0;
-  static constexpr double positionScaleFactor = 1;
-#pragma endregion
+	static constexpr double positionScaleFactor = 1024.0;
 
   void destroy();
 };
