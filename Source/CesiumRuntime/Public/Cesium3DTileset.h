@@ -1457,6 +1457,23 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DasModelTileset")
 	float BoundScale = 1.0;//限制碰撞刷新、优化效率
 
+#pragma region jiangs
+	// 获取是否允许瓦块Mesh的顶点/索引数据保留CPU可访问
+	UFUNCTION(BlueprintGetter, Category = "DasModelTileset")
+	bool GetAllowMeshCPUAccess() const { return AllowMeshCPUAccess; }
+
+	// 设置是否允许瓦块Mesh的顶点/索引数据保留CPU可访问，变化时会重新加载瓦块集
+	UFUNCTION(BlueprintSetter, Category = "DasModelTileset")
+	void SetAllowMeshCPUAccess(bool bInAllowMeshCPUAccess);
+
+	UPROPERTY(
+			EditAnywhere,
+			BlueprintGetter = GetAllowMeshCPUAccess,
+			BlueprintSetter = SetAllowMeshCPUAccess,
+			Category = "DasModelTileset")
+	bool AllowMeshCPUAccess = false;//是否让生成的瓦块Mesh顶点/索引缓冲保留CPU可访问权限
+#pragma endregion
+
 public:
 	int64 mnMinNeedCacheSize = 0;//需要最小的缓存大小
   bool mbBeginPlay = false;

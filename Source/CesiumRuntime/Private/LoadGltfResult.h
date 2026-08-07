@@ -87,6 +87,14 @@ struct LoadedPrimitiveResult {
 
   bool isUnlit = false;
 
+#pragma region jiangs
+  /**
+   * 该Primitive对应的Mesh是否需要保留CPU可访问的顶点/索引数据
+   * （供GameThread设置UStaticMesh::bAllowCPUAccess）
+   */
+  bool bAllowCPUAccess = false;
+#pragma endregion
+
   bool onlyLand = true;
   bool onlyWater = false;
 

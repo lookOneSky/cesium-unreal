@@ -52,6 +52,13 @@ struct CreateModelOptions {
    */
   bool ignoreKhrMaterialsUnlit = false;
 
+#pragma region jiangs
+  /**
+   * 是否让生成的瓦块Mesh保留CPU可访问的顶点/索引数据
+   */
+  bool allowMeshCPUAccess = false;
+#pragma endregion
+
   Cesium3DTilesSelection::TileLoadResult tileLoadResult;
 
 public:
@@ -67,6 +74,9 @@ public:
         alwaysIncludeTangents(other.alwaysIncludeTangents),
         createPhysicsMeshes(other.createPhysicsMeshes),
         ignoreKhrMaterialsUnlit(other.ignoreKhrMaterialsUnlit),
+#pragma region jiangs
+        allowMeshCPUAccess(other.allowMeshCPUAccess),
+#pragma endregion
         tileLoadResult(std::move(other.tileLoadResult)) {
     pModel = std::get_if<CesiumGltf::Model>(&this->tileLoadResult.contentKind);
   }

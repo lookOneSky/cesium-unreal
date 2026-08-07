@@ -43,6 +43,10 @@ UnrealPrepareRendererResources::prepareInLoadThread(
 
   options.ignoreKhrMaterialsUnlit = this->_pActor->GetIgnoreKhrMaterialsUnlit();
 
+#pragma region jiangs
+  options.allowMeshCPUAccess = this->_pActor->GetAllowMeshCPUAccess();
+#pragma endregion
+
   if (this->_pActor->_featuresMetadataDescription) {
     options.pFeaturesMetadataDescription =
         &(*this->_pActor->_featuresMetadataDescription);

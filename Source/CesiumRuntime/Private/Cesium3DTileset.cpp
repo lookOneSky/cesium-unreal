@@ -507,6 +507,16 @@ void ACesium3DTileset::SetCreateNavCollision(bool bCreateNavCollision) {
   }
 }
 
+#pragma region jiangs
+// 设置是否允许瓦块Mesh保留CPU可访问数据，变化时销毁并重新加载瓦块集使其对已加载瓦块生效
+void ACesium3DTileset::SetAllowMeshCPUAccess(bool bInAllowMeshCPUAccess) {
+  if (this->AllowMeshCPUAccess != bInAllowMeshCPUAccess) {
+    this->AllowMeshCPUAccess = bInAllowMeshCPUAccess;
+    this->DestroyTileset();
+  }
+}
+#pragma endregion
+
 void ACesium3DTileset::SetAlwaysIncludeTangents(bool bAlwaysIncludeTangents) {
   if (this->AlwaysIncludeTangents != bAlwaysIncludeTangents) {
     this->AlwaysIncludeTangents = bAlwaysIncludeTangents;
@@ -2188,6 +2198,10 @@ void ACesium3DTileset::PostEditChangeProperty(
           GET_MEMBER_NAME_CHECKED(ACesium3DTileset, CreateNavCollision) ||
       PropName ==
           GET_MEMBER_NAME_CHECKED(ACesium3DTileset, AlwaysIncludeTangents) ||
+#pragma region jiangs
+      PropName ==
+          GET_MEMBER_NAME_CHECKED(ACesium3DTileset, AllowMeshCPUAccess) ||
+#pragma endregion
       PropName ==
           GET_MEMBER_NAME_CHECKED(ACesium3DTileset, GenerateSmoothNormals) ||
       PropName == GET_MEMBER_NAME_CHECKED(ACesium3DTileset, EnableWaterMask) ||

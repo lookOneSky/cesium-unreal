@@ -1692,6 +1692,11 @@ static void loadPrimitive(
     computeTangentSpace(StaticMeshBuildVertices);
   }
 
+#pragma region jiangs
+  bool bNeedsCPUAccess =
+      options.pMeshOptions->pNodeOptions->pModelOptions->allowMeshCPUAccess;
+#pragma endregion
+
   {
     TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::InitBuffers)
 
@@ -1703,12 +1708,12 @@ static void loadPrimitive(
 
     LODResources.VertexBuffers.PositionVertexBuffer.Init(
         StaticMeshBuildVertices,
-        false);
+        bNeedsCPUAccess);
 
     FColorVertexBuffer& ColorVertexBuffer =
         LODResources.VertexBuffers.ColorVertexBuffer;
     if (hasVertexColors) {
-      ColorVertexBuffer.Init(StaticMeshBuildVertices, false);
+      ColorVertexBuffer.Init(StaticMeshBuildVertices, bNeedsCPUAccess);
     }
 
     uint32 numberOfTextureCoordinates =
@@ -1721,7 +1726,7 @@ static void loadPrimitive(
     vertexBuffer.Init(
         StaticMeshBuildVertices.Num(),
         numberOfTextureCoordinates,
-        false);
+        bNeedsCPUAccess);
 
     // Manually copy the vertices into the buffer. We do this because UE 5.3
     // and 5.4 have a bug where the overload of `FStaticMeshVertexBuffer::Init`
@@ -1768,6 +1773,9 @@ static void loadPrimitive(
 
   {
     TRACE_CPUPROFILER_EVENT_SCOPE(Cesium::SetIndices)
+#pragma region jiangs
+    LODResources.IndexBuffer.TrySetAllowCPUAccess(bNeedsCPUAccess);
+#pragma endregion
     LODResources.IndexBuffer.SetIndices(
         indices,
         StaticMeshBuildVertices.Num() >= std::numeric_limits<uint16>::max()
@@ -1802,6 +1810,11 @@ static void loadPrimitive(
   primitiveResult.primitiveIndex = options.primitiveIndex;
   primitiveResult.RenderData = std::move(RenderData);
   primitiveResult.pCollisionMesh = nullptr;
+
+#pragma region jiangs
+  primitiveResult.bAllowCPUAccess =
+      options.pMeshOptions->pNodeOptions->pModelOptions->allowMeshCPUAccess;
+#pragma endregion
 
 #pragma region Das
   // 保存primitive mode供Game Thread使用
@@ -3267,6 +3280,10 @@ static void loadPrimitiveGameThreadPart(
     pStaticMesh->SetFlags(
         RF_Transient | RF_DuplicateTransient | RF_TextExportTransient);
     pStaticMesh->NeverStream = true;
+
+#pragma region jiangs
+    pStaticMesh->bAllowCPUAccess = loadResult.bAllowCPUAccess;
+#pragma endregion
 
     pStaticMesh->SetRenderData(std::move(loadResult.RenderData));
   }
