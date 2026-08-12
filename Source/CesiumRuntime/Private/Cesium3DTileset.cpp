@@ -515,6 +515,14 @@ void ACesium3DTileset::SetAllowMeshCPUAccess(bool bInAllowMeshCPUAccess) {
     this->DestroyTileset();
   }
 }
+
+// 设置是否强制禁止瓦块投射阴影，变化时销毁并重新加载瓦块集使其对已加载瓦块生效
+void ACesium3DTileset::SetForbidCastShadow(bool bInForbidCastShadow) {
+  if (this->ForbidCastShadow != bInForbidCastShadow) {
+    this->ForbidCastShadow = bInForbidCastShadow;
+    this->DestroyTileset();
+  }
+}
 #pragma endregion
 
 void ACesium3DTileset::SetAlwaysIncludeTangents(bool bAlwaysIncludeTangents) {
@@ -2201,6 +2209,8 @@ void ACesium3DTileset::PostEditChangeProperty(
 #pragma region jiangs
       PropName ==
           GET_MEMBER_NAME_CHECKED(ACesium3DTileset, AllowMeshCPUAccess) ||
+      PropName ==
+          GET_MEMBER_NAME_CHECKED(ACesium3DTileset, ForbidCastShadow) ||
 #pragma endregion
       PropName ==
           GET_MEMBER_NAME_CHECKED(ACesium3DTileset, GenerateSmoothNormals) ||

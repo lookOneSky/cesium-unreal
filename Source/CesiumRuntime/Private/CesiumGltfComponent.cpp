@@ -3258,9 +3258,15 @@ static void loadPrimitiveGameThreadPart(
         pGltf->CustomDepthParameters.CustomDepthStencilWriteMask);
     pMesh->SetCustomDepthStencilValue(
         pGltf->CustomDepthParameters.CustomDepthStencilValue);
-    if (loadResult.isUnlit) {
-      //region Das是否投射阴影
+    //region Das是否投射阴影
+    const bool bForbidCastShadow =
+        primData.pTilesetActor->GetForbidCastShadow();
+    if (loadResult.isUnlit || bForbidCastShadow) {
       pMesh->bCastDynamicShadow = false;
+    }
+    if (bForbidCastShadow) {
+      // 关总开关，使该Mesh完全不参与阴影投射（含静态阴影、距离场）
+      pMesh->CastShadow = false;
     }
     pMesh->RuntimeVirtualTextures =
         primData.pTilesetActor->GetRuntimeVirtualTextures();

@@ -1472,6 +1472,21 @@ public:
 			BlueprintSetter = SetAllowMeshCPUAccess,
 			Category = "DasModelTileset")
 	bool AllowMeshCPUAccess = false;//是否让生成的瓦块Mesh顶点/索引缓冲保留CPU可访问权限
+
+	// 获取是否强制禁止瓦块投射阴影
+	UFUNCTION(BlueprintGetter, Category = "DasModelTileset")
+	bool GetForbidCastShadow() const { return ForbidCastShadow; }
+
+	// 设置是否强制禁止瓦块投射阴影，变化时会重新加载瓦块集
+	UFUNCTION(BlueprintSetter, Category = "DasModelTileset")
+	void SetForbidCastShadow(bool bInForbidCastShadow);
+
+	UPROPERTY(
+			EditAnywhere,
+			BlueprintGetter = GetForbidCastShadow,
+			BlueprintSetter = SetForbidCastShadow,
+			Category = "DasModelTileset")
+	bool ForbidCastShadow = false;//是否强制禁止瓦块投射阴影（同时关闭动态阴影与CastShadow总开关）
 #pragma endregion
 
 public:
