@@ -71,7 +71,17 @@ public class CesiumEditor : ModuleRules
 
         string libPath = useDebug ? libPathDebug : libPathRelease;
 
-        string[] allLibs = Directory.Exists(libPath) ? Directory.GetFiles(libPath, libSearchPattern) : new string[0];
+    //libcrypto、libssl剔除
+    string[] allLibs = Directory.Exists(libPath)
+            ? Directory.GetFiles(libPath, libSearchPattern)
+                .Where(libraryPath =>
+                {
+                    string libraryName = Path.GetFileNameWithoutExtension(libraryPath);
+                    return !libraryName.Equals("libcrypto", StringComparison.OrdinalIgnoreCase) &&
+                           !libraryName.Equals("libssl", StringComparison.OrdinalIgnoreCase);
+                })
+                .ToArray()
+            : new string[0];
 
         PublicAdditionalLibraries.AddRange(allLibs);
 
