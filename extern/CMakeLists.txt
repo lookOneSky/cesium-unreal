@@ -125,7 +125,7 @@ if (NOT VCPKG_TRIPLET)
     endif()
 endif()
 
-# OpenSSL is part of Unreal Engine, so do not install another copy with Cesium.
+# Our OpenSSL is part of Unreal Engine, so need to install it.
 set(CESIUM_EXCLUDE_INSTALL_HEADERS openssl)
 set(CESIUM_EXCLUDE_INSTALL_STATIC_LIBS openssl)
 
