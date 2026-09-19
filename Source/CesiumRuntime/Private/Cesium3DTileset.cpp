@@ -345,7 +345,9 @@ void ACesium3DTileset::TroubleshootToken() {
 
 void ACesium3DTileset::AddFocusViewportDelegate() {
 #if WITH_EDITOR
-  FEditorDelegates::OnFocusViewportOnActors.AddLambda(
+  // Das: 使用弱引用lambda，Actor销毁后自动失效，避免野指针
+  FEditorDelegates::OnFocusViewportOnActors.AddWeakLambda(
+      this,
       [this](const TArray<AActor*>& actors) {
         if (actors.Num() == 1 && actors[0] == this) {
           this->OnFocusEditorViewportOnThis();
@@ -720,6 +722,14 @@ void ACesium3DTileset::OnFocusEditorViewportOnThis() {
   FVector unrealCenter =
       pGeoreference->TransformEarthCenteredEarthFixedPositionToUnreal(
           VecMath::createVector(ecefCenter));
+
+#pragma region Das
+  // Das: 包围盒为Tileset原始坐标，需要叠加Actor变换（用户位置、缩放、ENU偏移）才是实际显示位置
+  const FTransform& transActor = this->GetActorTransform();
+  unrealCameraPosition = transActor.TransformPosition(unrealCameraPosition);
+  unrealCenter = transActor.TransformPosition(unrealCenter);
+#pragma endregion
+
   FVector unrealCameraFront =
       (unrealCenter - unrealCameraPosition).GetSafeNormal();
   FVector unrealCameraRight =

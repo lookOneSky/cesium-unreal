@@ -619,7 +619,7 @@ public:
    * function can help.
    */
   UFUNCTION(CallInEditor, BlueprintCallable, Category = "Cesium")
-  void RefreshTileset();
+  virtual void RefreshTileset(); // Das: 改为虚函数，供DasModelTileset重载刷新DasDataInfo
 
   /**
    * Pauses level-of-detail and culling updates of this tileset.
