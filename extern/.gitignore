@@ -1,3 +1,7 @@
 build
 build-android
 build-trace
+#pragma region jiangs
+build-vs2026
+build-vs2026-msbuild
+#pragma endregion jiangs
